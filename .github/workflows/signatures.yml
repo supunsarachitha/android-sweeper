@@ -1,0 +1,80 @@
+name: Malware signatures
+
+# Builds the known-malware hash list the app downloads: the Android samples (APK/DEX) from the
+# MalwareBazaar full export (abuse.ch, CC0), in the format of tools/signatures/sigformat.py, signed with
+# ECDSA P-256. The result replaces the "signatures" branch (one commit, no history), which the app reads from
+# https://raw.githubusercontent.com/supunsarachitha/android-sweeper/signatures/signatures.bin
+on:
+  schedule:
+    - cron: '23 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: signatures
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download the MalwareBazaar export
+        env:
+          AUTH_KEY: ${{ secrets.ABUSECH_AUTH_KEY }}
+        run: |
+          if [ -z "$AUTH_KEY" ]; then
+            echo "::error::Repository secret ABUSECH_AUTH_KEY is missing (free key from https://auth.abuse.ch/)"
+            exit 1
+          fi
+          mkdir -p export
+          curl -fsS --retry 3 --max-time 900 -o export/full.zip \
+            "https://mb-api.abuse.ch/v2/files/exports/${AUTH_KEY}/full.csv.zip"
+          python3 -I -m zipfile -l export/full.zip
+          python3 -I -m zipfile -e export/full.zip export/
+      - name: Build the Android hash list
+        run: |
+          mkdir -p out
+          CSV=$(ls export/*.csv | head -1)
+          python3 -I tools/signatures/build_signatures.py "$CSV" out/signatures.bin out/info.json \
+            --previous-info "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/signatures/info.json"
+      - name: Sign and verify
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNATURES_SIGNING_KEY }}
+        run: |
+          umask 077
+          printf '%s\n' "$SIGNING_KEY" > "$RUNNER_TEMP/sig-key.pem"
+          openssl dgst -sha256 -sign "$RUNNER_TEMP/sig-key.pem" -out out/signatures.bin.sig out/signatures.bin
+          rm -f "$RUNNER_TEMP/sig-key.pem"
+          openssl dgst -sha256 -verify .github/signatures-public.pem -signature out/signatures.bin.sig out/signatures.bin
+      - name: Publish to the signatures branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp .github/signatures-public.pem out/
+          {
+            echo "# Android Sweeper malware signatures"
+            echo ""
+            echo "Built $(date -u '+%Y-%m-%d %H:%M UTC') by the \"Malware signatures\" workflow on main. Replaced weekly; no history."
+            echo ""
+            echo "- \`signatures.bin\`: SHA-256 hashes of known Android malware (APK/DEX) from MalwareBazaar (abuse.ch, CC0). Format: tools/signatures/sigformat.py on main."
+            echo "- \`signatures.bin.sig\`: ECDSA P-256 / SHA-256 signature (DER) over signatures.bin."
+            echo "- \`signatures-public.pem\`: the verification key (the app has its own built-in copy)."
+            echo "- \`info.json\`: build time, entry count, SHA-256."
+          } > out/README.md
+          cd out
+          git init -q -b signatures
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Signatures $(date -u +%Y-%m-%d)"
+          git push --force --quiet "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:signatures
+          cat info.json

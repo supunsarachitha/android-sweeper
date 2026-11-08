@@ -12,3 +12,4 @@ captures/
 *.keystore
 screenshots/
 out/
+__pycache__/
