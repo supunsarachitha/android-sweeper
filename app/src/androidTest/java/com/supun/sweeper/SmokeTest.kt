@@ -2,11 +2,13 @@ package com.supun.sweeper
 
 import android.os.ParcelFileDescriptor
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
@@ -60,6 +62,7 @@ class SmokeTest {
         rule.waitUntil(30_000) {
             rule.onAllNodesWithTag("app_row_com.supun.sweeper").fetchSemanticsNodes().isNotEmpty()
         }
+        rule.onNodeWithTag("apps_list").performScrollToNode(hasTestTag("app_row_com.supun.sweeper"))
         rule.onNodeWithTag("app_row_com.supun.sweeper").assertIsDisplayed()
     }
 }

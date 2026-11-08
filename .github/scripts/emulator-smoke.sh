@@ -50,6 +50,10 @@ adb shell appops set "$PKG" GET_USAGE_STATS allow
 SHOT_WAIT=8 shot no home-breakdown-light.png
 SHOT_WAIT=8 shot no apps-list-light.png --es open apps
 SHOT_WAIT=8 shot yes apps-list-dark.png --es open apps
+# Two apps ticked for "Clear caches"; and whether this system image offers the clear-all-caches screen.
+SHOT_WAIT=8 shot no apps-selected-light.png --es open apps --es select com.supun.sweeper,com.android.settings
+echo "Clear-all-caches screen on this image:"
+adb shell cmd package resolve-activity -a android.os.storage.action.CLEAR_APP_CACHE | head -5 || true
 adb shell cmd uimode night no
 
 # --- Phase 3: files and trash ---------------------------------------------------------------
