@@ -41,17 +41,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.supun.sweeper.storage.FileCleaner
 import com.supun.sweeper.storage.StorageBreakdown
 import com.supun.sweeper.storage.StorageRepository
+import com.supun.sweeper.storage.TrashSummary
 import com.supun.sweeper.storage.UsageAccess
 import com.supun.sweeper.storage.VolumeInfo
 import com.supun.sweeper.util.formatBytes
 import com.supun.sweeper.util.usedFraction
+import kotlinx.coroutines.CancellationException
 
 private data class Feature(val title: String, val description: String)
 
 private val upcoming = listOf(
-    Feature("Large & old files", "Find big files, old downloads and leftover APKs."),
     Feature("Duplicates", "Find identical copies of the same file."),
     Feature("Junk cleanup", "Empty folders, temp files and thumbnail caches."),
 )
@@ -66,7 +68,7 @@ private val OtherColor = Color(0xFF94A3B8)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(resumeCount: Int, onOpenApps: () -> Unit) {
+fun HomeScreen(resumeCount: Int, onOpenApps: () -> Unit, onOpenFiles: () -> Unit, onOpenTrash: () -> Unit) {
     val context = LocalContext.current
     val repo = remember { StorageRepository(context) }
     var volume by remember { mutableStateOf(StorageRepository.statFsVolume()) }
@@ -74,7 +76,20 @@ fun HomeScreen(resumeCount: Int, onOpenApps: () -> Unit) {
     // Re-checked every time the app comes back to the front (e.g. from Usage access settings).
     val granted = remember(resumeCount) { UsageAccess.isGranted(context) }
 
+    val cleaner = remember { FileCleaner(context) }
+    var trashSummary by remember { mutableStateOf(TrashSummary(0, 0)) }
+
     LaunchedEffect(Unit) { volume = repo.internalVolume() }
+    // Refreshed whenever Home is shown again (e.g. back from the Trash screen).
+    LaunchedEffect(resumeCount) {
+        trashSummary = try {
+            cleaner.trashSummary()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            TrashSummary(0, 0)
+        }
+    }
     LaunchedEffect(granted) {
         breakdown = if (granted) repo.breakdown() else null
     }
@@ -96,6 +111,8 @@ fun HomeScreen(resumeCount: Int, onOpenApps: () -> Unit) {
                 }
             }
             item { AppsCard(onOpenApps) }
+            item { FilesCard(onOpenFiles) }
+            item { TrashCard(trashSummary, onOpenTrash) }
             items(upcoming) { FeatureCard(it) }
             item {
                 TextButton(onClick = { openStorageSettings(context) }) {
@@ -206,6 +223,30 @@ private fun AppsCard(onClick: () -> Unit) {
         Column(Modifier.padding(16.dp)) {
             Text("Apps", style = MaterialTheme.typography.titleMedium)
             Text("See every app's size and cache", style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+@Composable
+private fun FilesCard(onClick: () -> Unit) {
+    Card(onClick = onClick, modifier = Modifier.fillMaxWidth().testTag("files_card")) {
+        Column(Modifier.padding(16.dp)) {
+            Text("Large & old files", style = MaterialTheme.typography.titleMedium)
+            Text("Find big files, old downloads and leftover APKs.", style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+@Composable
+private fun TrashCard(summary: TrashSummary, onClick: () -> Unit) {
+    Card(onClick = onClick, modifier = Modifier.fillMaxWidth().testTag("trash_card")) {
+        Column(Modifier.padding(16.dp)) {
+            Text("Trash", style = MaterialTheme.typography.titleMedium)
+            val items = if (summary.count == 1) "1 item" else "${summary.count} items"
+            Text(
+                "$items · ${formatBytes(summary.bytes)} · emptied automatically after 7 days",
+                style = MaterialTheme.typography.bodyMedium,
+            )
         }
     }
 }

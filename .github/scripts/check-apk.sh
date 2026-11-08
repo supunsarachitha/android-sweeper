@@ -13,6 +13,12 @@ ALLOWED_PERMISSIONS=(
   android.permission.PACKAGE_USAGE_STATS
   # Android 11+ package visibility: needed to list all installed apps (sideloaded app, not on Play).
   android.permission.QUERY_ALL_PACKAGES
+  # "All files access" (Android 11+): needed to find big/old files anywhere on shared storage and move
+  # them into the app's own trash folder. Files never leave the phone (no INTERNET).
+  android.permission.MANAGE_EXTERNAL_STORAGE
+  # Android 8-10 equivalent of the above (the manifest limits both to maxSdkVersion 29).
+  android.permission.READ_EXTERNAL_STORAGE
+  android.permission.WRITE_EXTERNAL_STORAGE
 )
 
 fail=0
