@@ -41,6 +41,7 @@ class CacheQueueTest {
     @Test fun clearCachesWalksThroughTheTickedAppAndShowsTheSummary() {
         shell("appops set $pkg GET_USAGE_STATS allow")
         rule.waitForIdle()
+        rule.onNodeWithTag("home_list").performScrollToNode(hasTestTag("apps_card"))
         rule.onNodeWithTag("apps_card").performClick()
         rule.waitUntil(30_000) { hasNode("app_check_$pkg") }
         rule.onNodeWithTag("apps_list").performScrollToNode(hasTestTag("app_check_$pkg"))

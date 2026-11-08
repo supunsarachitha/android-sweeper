@@ -2,11 +2,13 @@ package com.supun.sweeper
 
 import android.os.ParcelFileDescriptor
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.supun.sweeper.files.Trash
@@ -63,11 +65,14 @@ class FilesTest {
     }
 
     @Test fun homeShowsFilesAndTrashCards() {
+        rule.onNodeWithTag("home_list").performScrollToNode(hasTestTag("files_card"))
         rule.onNodeWithTag("files_card").assertIsDisplayed()
+        rule.onNodeWithTag("home_list").performScrollToNode(hasTestTag("trash_card"))
         rule.onNodeWithTag("trash_card").assertIsDisplayed()
     }
 
     @Test fun trashAndRestoreALargeFile() {
+        rule.onNodeWithTag("home_list").performScrollToNode(hasTestTag("files_card"))
         rule.onNodeWithTag("files_card").performClick()
         waitForTag("file_row_$testFile")
         rule.onNodeWithTag("file_row_$testFile").assertIsDisplayed()
@@ -80,6 +85,7 @@ class FilesTest {
 
         rule.onNodeWithContentDescription("Back").performClick()
         rule.waitForIdle()
+        rule.onNodeWithTag("home_list").performScrollToNode(hasTestTag("trash_card"))
         rule.onNodeWithTag("trash_card").performClick()
         waitForTag("trash_row_$testFile")
         rule.onNodeWithTag("trash_row_$testFile").assertIsDisplayed()
