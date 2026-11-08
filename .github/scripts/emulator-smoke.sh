@@ -123,6 +123,14 @@ adb shell "dd if=/dev/urandom of=$JUNK_THUMB bs=1024 count=40"
 SHOT_WAIT=20 shot no junk-light.png --es open junk
 adb shell input keyevent KEYCODE_BACK
 sleep 4
+# The Junk card is below the fold: scroll Home to the bottom so the "of junk" line is visible.
+SIZE=$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -1)
+W=${SIZE%x*}
+H=${SIZE#*x}
+for _ in 1 2 3; do
+  adb shell input swipe $((W / 2)) $((H * 3 / 4)) $((W / 2)) $((H / 4)) 300
+done
+sleep 2
 adb exec-out screencap -p > screenshots/home-final-light.png
 SHOT_WAIT=20 shot yes junk-dark.png --es open junk
 
