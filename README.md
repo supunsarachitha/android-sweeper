@@ -58,7 +58,10 @@ on the permission allowlist with this reason.
 
 **What it does.** The Malware screen computes the SHA-256 of every installed app's APK files
 (including split APKs) and, when All files access is on, of every `.apk` and `.dex` file on
-shared storage. Each hash is looked up in a list of known Android malware samples. A match
+shared storage, plus any file whose contents start like an APK or DEX file whatever its name
+(a renamed APK such as `.cache/update.bin`). Unlike the cleaning tools, this scan includes
+hidden folders; only `Android/data`, `Android/obb` (blocked by Android) and the app's own trash
+are left out. Each hash is looked up in a list of known Android malware samples. A match
 shows the malware family and offers **Uninstall** and **App info** for an app, or **Move to
 trash** (with the usual confirm dialog and Undo) for a file.
 
