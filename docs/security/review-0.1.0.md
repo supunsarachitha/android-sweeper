@@ -102,3 +102,23 @@ The biggest real risk of a cleaner is deleting the wrong files. These rules appl
 - **S2 CI supply chain** (3, 5): current Actions pinned to SHAs, `sha_pinning_required` on, repository content filters, dependency verification metadata, manifest guard test.
 - **S3 Monitoring and release** (6, 8, 9): Dependabot alerts, dependency submission, SHA-256 and certificate fingerprint in release notes, `dataExtractionRules`. Release v0.1.1.
 - **Owner:** back up the signing key (7).
+
+## Fix status (v0.1.1, PR #4)
+
+| # | Status | How |
+|---|--------|-----|
+| 1 | Fixed | Gradle 9.9.0 with `distributionSha256Sum`; wrapper jar checked against Gradle's published SHA-256 |
+| 2 | Fixed | Kotlin 2.4.21 (AGP 9.5.1 built-in Kotlin; the verification metadata confirms KGP 2.4.21 is what resolves) |
+| 3 | Fixed | All Actions on current majors, pinned to commit SHAs; read-only default token; no persisted checkout credentials; key file deleted after the build. `gradle/actions/setup-gradle` removed: its v6 caching is a proprietary component under separate terms, and it ran next to the signing key. `setup-java`'s Gradle cache replaces it; Gradle's `wrapper-validation` stays. Repo setting "require SHA pinning" turned on after merge. |
+| 4 | Fixed | AGP 9.5.1, Compose BOM 2026.09.00, core 1.19.1, activity 1.13.0, lifecycle 2.11.0, compileSdk 37 / targetSdk 36 |
+| 5 | Fixed | `google()` exclusive for `androidx.*`, `com.android.*`, `com.google.testing.platform.*`; everything else from Maven Central only; Plugin Portal removed. `gradle/verification-metadata.xml` pins SHA-256 for 604 artifacts (362 components), generated from fresh downloads by `dependency-metadata.yml` |
+| 6 | Fixed | Dependabot alerts on (version-update PRs stay off). `osv.yml` scans on every push/PR and weekly: runtime libraries, AGP/KGP, Gradle (from Gradle's GitHub advisory feed, which OSV does not carry) and pinned Actions (OSV cannot version-match Actions, so ranges are evaluated in the script). Each check was confirmed to flag a known-bad version before relying on it. |
+| 7 | Owner | Back up the signing key folder |
+| 8 | Fixed | `check-apk.sh` runs on every build and again before publishing: permission allowlist (INTERNET never allowed), not debuggable/testOnly, exactly one signing certificate equal to `.github/signing-cert-sha256.txt`. Release notes carry the APK SHA-256 and certificate fingerprint. |
+| 9 | Fixed | `dataExtractionRules` exclude all domains from cloud backup and device transfer |
+
+Remaining, accepted: the scan reports build-time-only advisories inside AGP's own dependencies (Guava, BouncyCastle, commons-lang3, httpclient, jose4j, jdom2) as warnings. They run only inside the build, never ship in the APK, and are fixed by AGP updates.
+
+Not tested: dependency verification against a tampered artifact. Gradle enforces it whenever the metadata file is present; no tamper test was run.
+
+Updating dependencies from now on: change versions, push to a `deps/<name>` branch, download the `verification-metadata` artifact, review the diff, commit it.
