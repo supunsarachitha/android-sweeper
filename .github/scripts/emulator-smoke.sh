@@ -192,5 +192,34 @@ shot_when no malware-match-light.png "Demo.Banker" 180 --es open malware --es de
 shot_when yes malware-dark.png "Demo.Banker" 180 --es open malware --es demo malware --es demohash "$MAL_HASH"
 adb shell "rm -f $MAL_FILE $UI_DUMP" || true
 
+# --- Phase 7: deep scan of all files ----------------------------------------------------------
+# A random file with an .exe name in a hidden folder stands in for a Windows program. "demo deep" is a
+# debug-build-only extra: it installs a demo all-files list (signed with a key made at run time, never the real
+# key) containing the file's hash and starts a deep scan. "scroll deep" only scrolls to the deep-scan card.
+DEEP_DIR=/sdcard/Documents/.hidden
+DEEP_FILE=$DEEP_DIR/sweeper-deep-demo.exe
+cleanup_files() {
+  adb shell "rm -f $BIG $OLD $APKCOPY $TRASH/$TRASHED $TRASH/index.tsv $TRASH/.nomedia; rmdir $TRASH" || true
+  adb shell "rm -f $DUP_BIG_A $DUP_BIG_B $DUP_SMALL_A $DUP_SMALL_B" || true
+  adb shell "rm -f $JUNK_TMP $JUNK_PART $JUNK_DL $JUNK_THUMB; rm -f '$JUNK_OFFICE'" || true
+  adb shell "rmdir $JUNK_EMPTY/a/b $JUNK_EMPTY/a $JUNK_EMPTY; rmdir /sdcard/DCIM/.thumbnails" || true
+  adb shell "rm -f $MAL_FILE $UI_DUMP" || true
+  adb shell "rm -f $DEEP_FILE; rmdir $DEEP_DIR" || true
+}
+adb shell appops set --uid "$PKG" MANAGE_EXTERNAL_STORAGE allow
+
+# No deep-scan list stored yet: the card offers the download (and fetches nothing).
+shot_when no deep-scan-idle-light.png "Not downloaded yet" 90 --es open malware --es scroll deep
+
+adb shell "mkdir -p $DEEP_DIR && dd if=/dev/urandom of=$DEEP_FILE bs=1024 count=64"
+DEEP_HASH=$(adb shell "sha256sum $DEEP_FILE" | tr -d '\r' | cut -d' ' -f1)
+if [ "${#DEEP_HASH}" -ne 64 ]; then
+  echo "Could not hash $DEEP_FILE (got '$DEEP_HASH')" >&2
+  exit 1
+fi
+shot_when no deep-scan-match-light.png "Demo.Trojan" 240 --es open malware --es demo deep --es demohash "$DEEP_HASH"
+shot_when yes deep-scan-dark.png "Demo.Trojan" 240 --es open malware --es demo deep --es demohash "$DEEP_HASH"
+adb shell "rm -f $DEEP_FILE; rmdir $DEEP_DIR" || true
+
 adb shell cmd uimode night no
 adb shell appops set --uid "$PKG" MANAGE_EXTERNAL_STORAGE default

@@ -91,11 +91,13 @@ fun HomeScreen(
     LaunchedEffect(resumeCount) {
         signatureLine = withContext(Dispatchers.IO) {
             val list = MalwareSignatures.store(context).current()
-            if (list == null) {
+            val deepList = MalwareSignatures.allStore(context).peekHeader() // header only: the list can be big
+            val line = if (list == null) {
                 "No signatures yet — tap to download"
             } else {
                 "Signatures from ${formatSignatureDate(list.createdAt)} · ${formatCount(list.count)} known samples"
             }
+            if (deepList == null) line else "$line · deep scan list: ${formatSignatureDate(deepList.createdAt)}"
         }
     }
 

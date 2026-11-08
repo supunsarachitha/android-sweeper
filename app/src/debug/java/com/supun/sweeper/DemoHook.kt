@@ -33,4 +33,28 @@ object DemoHook {
         store.install(data, sig)
         MalwareSignatures.useStoreForTests(store)
     }
+
+    /**
+     * Installs a demo deep-scan list (family "Demo.Trojan (exe)" for [fileHash], plus filler entries) the same way:
+     * a run-time key, its own folder, never the real stored list.
+     */
+    fun installDeep(context: Context, fileHash: String?) {
+        val kit = SignatureTestKit()
+        val entries = ArrayList<Pair<ByteArray, String>>()
+        val hash = fileHash?.lowercase()
+        if (hash != null && hash.length == 64 && hash.all { it in "0123456789abcdef" }) {
+            entries.add(SignatureTestKit.hexToBytes(hash) to "Demo.Trojan (exe)")
+        }
+        val digest = MessageDigest.getInstance("SHA-256")
+        for (i in 1..400) entries.add(digest.digest("demo-deep-sample-$i".toByteArray()) to "Demo.Filler${i % 7} (pdf)")
+        val (data, sig) = kit.signedFile(System.currentTimeMillis() / 1000, entries)
+        val store = SignatureStore(
+            File(context.filesDir, "signatures-all-demo"),
+            verifier = SignatureVerifier(kit.publicKeyBase64),
+            maxDataBytes = SignatureStore.MAX_ALL_DATA_BYTES,
+        )
+        store.clear()
+        store.install(data, sig)
+        MalwareSignatures.useAllStoreForTests(store)
+    }
 }
