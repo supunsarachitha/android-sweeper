@@ -36,7 +36,8 @@ jobs:
             exit 1
           fi
           mkdir -p export
-          curl -fsS --retry 3 --max-time 900 -o export/full.zip \
+          # HTTP/1.1: the large export broke off mid-stream over HTTP/2 (curl error 92).
+          curl -fsS --http1.1 --retry 4 --retry-all-errors --retry-delay 20 --max-time 1200 -o export/full.zip \
             "https://mb-api.abuse.ch/v2/files/exports/${AUTH_KEY}/full.csv.zip"
           python3 -I -m zipfile -l export/full.zip
           python3 -I -m zipfile -e export/full.zip export/
