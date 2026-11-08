@@ -146,6 +146,15 @@ class DuplicateSelectionTest {
         assertEquals(2, plan.skipped.size)
     }
 
+    @Test fun planSkipsAGroupWhoseKeptCopyWasEditedInPlace() {
+        val g = trio()
+        File(root, "old.txt").writeText("diff") // same length as "same", different content
+        File(root, "old.txt").setLastModified(9999)
+        val plan = planDuplicateTrash(listOf(g), DuplicateSelection().keepOldest(g))
+        assertEquals(0, plan.toTrash.size)
+        assertEquals(setOf("new.txt", "mid.txt"), plan.skipped.map { it.name }.toSet())
+    }
+
     @Test fun planSkipsASelectedFileThatChanged() {
         val g = trio()
         val s = DuplicateSelection().keepOldest(g)

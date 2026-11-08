@@ -70,7 +70,7 @@ class DuplicateTrashPlan(val toTrash: List<FoundFile>, val skipped: List<FoundFi
 
 /**
  * [filesToTrash] plus a last look at the disk: a group is only trashed if at least one kept copy still exists
- * as a regular file with the size it had when found. A selected file that changed since the scan (size or
+ * as a regular file with the size and modified time it had when found. A selected file that changed since the scan (size or
  * modified time) is held back too, as it may no longer be a duplicate. Everything held back is in [skipped].
  */
 fun planDuplicateTrash(groups: List<DuplicateGroup>, selection: DuplicateSelection): DuplicateTrashPlan {
@@ -80,7 +80,9 @@ fun planDuplicateTrash(groups: List<DuplicateGroup>, selection: DuplicateSelecti
     for (group in groups) {
         val selected = group.files.filter { it.path in selection.paths }
         if (selected.isEmpty()) continue
-        val keptAlive = group.files.any { it.path !in selection.paths && unchanged(it, checkTime = false) }
+        // The kept copy must be exactly as scanned (size AND modified time): if it was edited since, the
+        // selected copies may be the only remaining version of the old content.
+        val keptAlive = group.files.any { it.path !in selection.paths && unchanged(it, checkTime = true) }
         if (!keptAlive) {
             skipped.addAll(selected)
             continue
