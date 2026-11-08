@@ -3,10 +3,18 @@
 //   come ONLY from it, so nothing else can be swapped in under those names.
 // - Everything else comes from Maven Central. The Gradle Plugin Portal (open
 //   publishing) is not used.
+// (pluginManagement is compiled on its own, so the rule is repeated, not shared.)
 // - gradle/verification-metadata.xml pins the SHA-256 of every artifact.
 pluginManagement {
     repositories {
-        googleOnlyForAndroid()
+        exclusiveContent {
+            forRepository { google() }
+            filter {
+                includeGroupByRegex("androidx(\\..*)?")
+                includeGroupByRegex("com\\.android(\\..*)?")
+                includeGroupByRegex("com\\.google\\.testing\\.platform(\\..*)?")
+            }
+        }
         mavenCentral()
     }
 }
@@ -14,19 +22,15 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
-        googleOnlyForAndroid()
-        mavenCentral()
-    }
-}
-
-fun RepositoryHandler.googleOnlyForAndroid() {
-    exclusiveContent {
-        forRepository { google() }
-        filter {
-            includeGroupByRegex("androidx(\\..*)?")
-            includeGroupByRegex("com\\.android(\\..*)?")
-            includeGroupByRegex("com\\.google\\.testing\\.platform(\\..*)?")
+        exclusiveContent {
+            forRepository { google() }
+            filter {
+                includeGroupByRegex("androidx(\\..*)?")
+                includeGroupByRegex("com\\.android(\\..*)?")
+                includeGroupByRegex("com\\.google\\.testing\\.platform(\\..*)?")
+            }
         }
+        mavenCentral()
     }
 }
 
