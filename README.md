@@ -1,8 +1,8 @@
 # Android Sweeper
 
 A personal Android storage cleaner. It is sideloaded (not on Google Play) and sends nothing
-about you or your files anywhere. Its only network use is one download: the signed list of
-known Android malware (see [Malware check](#malware-check)). Nothing is removed without a
+about you or your files anywhere. Its only network use is downloading two signed lists of
+known malware (see [Malware check](#malware-check)). Nothing is removed without a
 review screen and a confirm dialog first.
 
 Requirements: Android 8.0 (API 26) or newer.
@@ -26,7 +26,8 @@ Requirements: Android 8.0 (API 26) or newer.
   - temp files (`*.tmp`, `*.temp`, `*.part`, `*.crdownload`, `~$*`, `Thumbs.db`, `.DS_Store`),
   - this app's own cache.
 - **Malware check:** compares your installed apps and the APK/DEX files on storage with a
-  signed list of known Android malware. See below.
+  signed list of known Android malware, and (deep scan) every file on storage with a larger
+  list of known malware of all kinds. See below.
 - **Trash:** everything removed from the lists above (except empty folders and the app's own
   cache) lands here. See below.
 
@@ -39,7 +40,7 @@ Every scan shows progress and can be cancelled.
 | Usage access (`PACKAGE_USAGE_STATS`) | Reads the size and cache of each app and the storage breakdown. You grant it in Android's Settings. |
 | See all apps (`QUERY_ALL_PACKAGES`) | Lists every installed app, not only the ones Android shows to all apps. |
 | All files access (`MANAGE_EXTERNAL_STORAGE`) | Finds files anywhere on shared storage and moves them into the trash. On Android 8-10 the normal storage permissions (read/write) are used instead. |
-| Internet (`INTERNET`) | Only to download the signed malware signature list from one fixed GitHub address, over HTTPS. Nothing is uploaded. CI enforces this (see below). |
+| Internet (`INTERNET`) | Only to download the two signed malware lists (`signatures.bin`, `signatures-all.bin`) from one fixed GitHub address, over HTTPS. Nothing is uploaded. CI enforces this (see below). |
 | Request delete packages (`REQUEST_DELETE_PACKAGES`) | Lets the Malware check open Android's own "Uninstall this app?" dialog. You still confirm every uninstall. |
 
 The app explains each permission before it sends you to Settings.
@@ -48,6 +49,8 @@ The app explains each permission before it sends you to Settings.
 build. It fails if any source file other than `SignatureDownloader.kt` contains networking code
 (`java.net`, `javax.net`, `HttpURLConnection`, sockets, OkHttp, Ktor, `WebView`,
 `DownloadManager`), or if that one file names any web address except the signature location.
+Both lists (two files each: the list and its signature) are downloaded from that same fixed
+address; only the file names differ.
 The downloader checks the address before connecting (https, host `raw.githubusercontent.com`,
 this repository's `signatures` folder), does not follow redirects, caps the download size and
 sends only a `User-Agent` of `AndroidSweeper/<version>`. The network security config forbids
@@ -80,7 +83,30 @@ the Malware screen and the installed list is at least 7 days old. There is no ba
 The screen warns when the list is more than 14 days old. A phone with no list yet downloads
 nothing until you tap the button.
 
-**Signature verification.** `signatures.bin.sig` is an ECDSA P-256 / SHA-256 signature. The
+**Deep scan (all files).** The quick scan above only looks at apps and APK/DEX files. The
+**Deep scan (all files)** card on the same screen hashes **every file** on shared storage
+(documents, pictures, archives, scripts, Windows programs and so on; hidden folders included,
+`Android/data`, `Android/obb` and the trash left out, links never followed) and looks each
+hash up in a second list, `signatures-all.bin`, which holds known malware of every file type
+(names like `AgentTesla (exe)`), and in the Android list. Things to know:
+
+- **Why it reports malware that can't run on Android.** A Windows program or a booby-trapped
+  document on your phone can't harm the phone, but it can harm a computer you copy it to.
+  Such matches get an amber card with the family name and the note that the file is
+  dangerous on a computer. A match on an Android sample (an APK or DEX) gets the red card.
+  Every match can be moved to the trash (confirm dialog, then Undo), nothing else is done.
+- **100 MB limit.** Files over 100 MB are not read; the result says how many were skipped.
+- **It is slow.** Every byte of every file is read once. On a phone with a lot of data this
+  can take a long time; the screen shows the files and gigabytes checked so far and has a
+  Cancel button. Needs All files access, like the other file tools.
+- **The second list** is bigger than the Android one (up to 256 MB allowed, against 64 MB),
+  is kept in its own folder (`signatures-all`), and is checked exactly like the first (see
+  below). It is downloaded only when you tap **Deep scan** and no list is stored or the stored
+  one is at least 7 days old, or when you tap **Update deep-scan list**. It is never
+  downloaded in the background, and the quick scan never uses it.
+
+**Signature verification.** Both lists are checked the same way. `signatures.bin.sig` is an ECDSA P-256 / SHA-256 signature (and
+`signatures-all.bin.sig` for the second list). The
 app has the matching public key built in (`.github/signatures-public.pem`) and installs a list
 only if the signature is valid, the format is exactly right (strict parser) and the list is
 newer than the installed one (no rollback to an older list, no dates more than 2 days in the
