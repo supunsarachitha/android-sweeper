@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -91,3 +92,32 @@ jobs:
           name: emulator-test-reports
           path: app/build/reports/androidTests/
           retention-days: 7
+
+  release:
+    name: Publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, emulator]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag must match versionName
+        run: |
+          VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          if [ "v$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match versionName $VERSION"
+            exit 1
+          fi
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk
+          path: out
+      - name: Create release with the APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" out/*.apk \
+            --title "Android Sweeper $GITHUB_REF_NAME" \
+            --generate-notes \
+            --verify-tag
