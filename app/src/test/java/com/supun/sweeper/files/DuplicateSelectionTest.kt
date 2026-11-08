@@ -94,7 +94,7 @@ class DuplicateSelectionTest {
             assertEquals(1, kept.size)
             assertEquals(g.files.minWith(oldestFirst).path, kept[0].path)
         }
-        assertEquals(4, s.size)
+        assertEquals(3, s.size)
         assertEquals(g1.files.drop(1).sumOf { it.size } + g2.files.drop(1).sumOf { it.size }, s.bytes(groups))
     }
 

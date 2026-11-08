@@ -41,7 +41,7 @@ class DuplicatesTest {
 
     private fun rowsWithPrefix(prefix: String) = rule.onAllNodes(
         SemanticsMatcher("test tag starts with $prefix") {
-            it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith(prefix) == true
+            SemanticsProperties.TestTag in it.config && it.config[SemanticsProperties.TestTag].startsWith(prefix)
         },
     )
 
