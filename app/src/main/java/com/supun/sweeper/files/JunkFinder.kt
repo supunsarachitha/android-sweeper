@@ -43,6 +43,9 @@ internal fun junkKind(rel: Path): JunkKind? {
     if (count == 0) return null
     val first = rel.getName(0).toString()
     if (isOffLimitsTopLevel(first)) return null
+    // A .nomedia marker tells the gallery to ignore its folder. Removing one from a thumbnail cache could make
+    // thumbnails show up as photos, so it is never junk, wherever it is.
+    if (rel.fileName.toString() == ".nomedia") return null
     if (count >= 3 && (first == "DCIM" || first == "Pictures") && rel.getName(1).toString() == ".thumbnails") {
         return JunkKind.THUMBNAIL
     }

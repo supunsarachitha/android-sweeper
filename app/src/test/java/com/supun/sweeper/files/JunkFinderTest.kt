@@ -154,6 +154,19 @@ class JunkFinderTest {
         assertEquals(emptyList<String>(), result.tempFiles.map { it.name })
     }
 
+    @Test fun nomediaMarkersAreNeverJunk() {
+        file("DCIM/.thumbnails/a.jpg")
+        val marker = file("DCIM/.thumbnails/.nomedia", "")
+        file("Pictures/.thumbnails/.nomedia", "")
+        file("Download/stuff/.nomedia", "")
+        val result = find()
+        assertEquals(listOf("a.jpg"), result.thumbnails.map { it.name })
+        assertEquals(emptyList<String>(), result.tempFiles.map { it.name })
+        assertFalse(isJunkFile(root, marker))
+        // A folder holding only a .nomedia marker still counts as having content.
+        assertFalse(empties().contains("Download/stuff"))
+    }
+
     @Test fun thumbnailFolderWithFilesIsNotReportedEmpty() {
         file("DCIM/.thumbnails/a.jpg")
         assertEquals(emptyList<String>(), empties())
