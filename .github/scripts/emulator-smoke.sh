@@ -134,5 +134,63 @@ sleep 2
 adb exec-out screencap -p > screenshots/home-final-light.png
 SHOT_WAIT=20 shot yes junk-dark.png --es open junk
 
+# --- Phase 6: malware check and restricted-settings help -------------------------------------
+# The app downloads nothing here. "demo malware" is a debug-build-only extra: it installs a demo signature list
+# signed with a key the app makes at run time, containing the hash of the file created below, and starts a scan.
+MAL_FILE=/sdcard/Download/sweeper-malware-demo.apk
+UI_DUMP=/data/local/tmp/sweeper-ui.xml
+cleanup_files() {
+  adb shell "rm -f $BIG $OLD $APKCOPY $TRASH/$TRASHED $TRASH/index.tsv $TRASH/.nomedia; rmdir $TRASH" || true
+  adb shell "rm -f $DUP_BIG_A $DUP_BIG_B $DUP_SMALL_A $DUP_SMALL_B" || true
+  adb shell "rm -f $JUNK_TMP $JUNK_PART $JUNK_DL $JUNK_THUMB; rm -f '$JUNK_OFFICE'" || true
+  adb shell "rmdir $JUNK_EMPTY/a/b $JUNK_EMPTY/a $JUNK_EMPTY; rmdir /sdcard/DCIM/.thumbnails" || true
+  adb shell "rm -f $MAL_FILE $UI_DUMP" || true
+}
+
+# shot_when <night> <file name> <text to wait for> <max seconds> [am start args...]
+# Like shot, but waits until the screen shows the text (polling the UI hierarchy) before taking the screenshot.
+shot_when() {
+  local night="$1" name="$2" needle="$3" limit="$4"
+  shift 4
+  adb shell cmd uimode night "$night"
+  adb shell am force-stop "$PKG"
+  adb shell am start -W -n "$PKG/.MainActivity" "$@"
+  local waited=0
+  while [ "$waited" -lt "$limit" ]; do
+    adb shell "rm -f $UI_DUMP" || true
+    adb shell "uiautomator dump $UI_DUMP" >/dev/null 2>&1 || true
+    if adb shell "grep -q '$needle' $UI_DUMP" >/dev/null 2>&1; then
+      echo "Found '$needle' after ${waited}s"
+      break
+    fi
+    sleep 3
+    waited=$((waited + 3))
+  done
+  sleep 2
+  if ! adb shell dumpsys activity activities | grep -q "topResumedActivity.*$PKG"; then
+    echo "App is not in the foreground; refusing to save a misleading screenshot" >&2
+    exit 1
+  fi
+  adb exec-out screencap -p > "screenshots/$name"
+}
+
+# The restricted-settings help, expanded, on the Usage access card (needs usage access to be off).
+adb shell appops set "$PKG" GET_USAGE_STATS default
+SHOT_WAIT=5 shot no restricted-help-light.png --es open apps --es demo restricted
+
+# No signatures yet: the app's own list is empty, so the screen offers the download (and does not fetch anything).
+SHOT_WAIT=5 shot no malware-empty-light.png --es open malware
+
+# A file standing in for malware, and the demo list that contains its hash.
+adb shell "dd if=/dev/urandom of=$MAL_FILE bs=1024 count=64"
+MAL_HASH=$(adb shell "sha256sum $MAL_FILE" | tr -d '\r' | cut -d' ' -f1)
+if [ "${#MAL_HASH}" -ne 64 ]; then
+  echo "Could not hash $MAL_FILE (got '$MAL_HASH')" >&2
+  exit 1
+fi
+shot_when no malware-match-light.png "Demo.Banker" 180 --es open malware --es demo malware --es demohash "$MAL_HASH"
+shot_when yes malware-dark.png "Demo.Banker" 180 --es open malware --es demo malware --es demohash "$MAL_HASH"
+adb shell "rm -f $MAL_FILE $UI_DUMP" || true
+
 adb shell cmd uimode night no
 adb shell appops set --uid "$PKG" MANAGE_EXTERNAL_STORAGE default

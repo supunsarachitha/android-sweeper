@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Fails if the APK requests a permission that is not on the allowlist (INTERNET is
-# never allowed), is debuggable or testOnly, or is signed with a different certificate.
+# Fails if the APK requests a permission that is not on the allowlist, is debuggable or
+# testOnly, or is signed with a different certificate. INTERNET is allowed for one purpose
+# only; check-network.sh keeps the networking code in a single file.
 set -euo pipefail
 APK="$1"
 BT="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
@@ -14,20 +15,22 @@ ALLOWED_PERMISSIONS=(
   # Android 11+ package visibility: needed to list all installed apps (sideloaded app, not on Play).
   android.permission.QUERY_ALL_PACKAGES
   # "All files access" (Android 11+): needed to find big/old files anywhere on shared storage and move
-  # them into the app's own trash folder. Files never leave the phone (no INTERNET).
+  # them into the app's own trash folder. Files are never uploaded.
   android.permission.MANAGE_EXTERNAL_STORAGE
   # Android 8-10 equivalent of the above (the manifest limits both to maxSdkVersion 29).
   android.permission.READ_EXTERNAL_STORAGE
   android.permission.WRITE_EXTERNAL_STORAGE
+  # Downloads the signed malware signature list from one fixed GitHub address; see .github/scripts/check-network.sh
+  android.permission.INTERNET
+  # Needed for the Uninstall action of the Malware check (Intent.ACTION_DELETE opens Android's own confirm dialog).
+  android.permission.REQUEST_DELETE_PACKAGES
 )
 
 fail=0
 perms=$("$BT/aapt2" dump permissions "$APK" | sed -n "s/^uses-permission: name='\([^']*\)'.*/\1/p")
 echo "Requested permissions:"; echo "${perms:-  (none)}"
 for p in $perms; do
-  if [ "$p" = android.permission.INTERNET ]; then
-    echo "::error::APK requests INTERNET. Android Sweeper must never have network access."; fail=1
-  elif ! printf '%s\n' "${ALLOWED_PERMISSIONS[@]}" | grep -qx "$p"; then
+  if ! printf '%s\n' "${ALLOWED_PERMISSIONS[@]}" | grep -qx "$p"; then
     echo "::error::Permission $p is not on the allowlist in .github/scripts/check-apk.sh"; fail=1
   fi
 done

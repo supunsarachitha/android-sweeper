@@ -330,7 +330,7 @@ internal fun AllFilesAccessCard(onAllow: () -> Unit) {
             Spacer(Modifier.height(8.dp))
             Text(
                 "Android Sweeper needs All files access to find big, old and leftover files and to move " +
-                    "them. Nothing leaves your phone: the app has no internet access. Files you remove go " +
+                    "them. Your files never leave your phone. Files you remove go " +
                     "to the trash first and stay there for 7 days, so you can restore them.",
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -338,6 +338,7 @@ internal fun AllFilesAccessCard(onAllow: () -> Unit) {
             Button(onClick = onAllow, modifier = Modifier.testTag("allow_all_files_button")) {
                 Text(if (AllFilesAccess.needsSettingsScreen) "Open All files access settings" else "Allow access")
             }
+            if (AllFilesAccess.needsSettingsScreen) RestrictedSettingsHelp()
         }
     }
 }

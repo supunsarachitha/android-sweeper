@@ -40,9 +40,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.supun.sweeper.malware.formatCount
+import com.supun.sweeper.malware.formatSignatureDate
 import com.supun.sweeper.storage.DuplicateStats
 import com.supun.sweeper.storage.FileCleaner
 import com.supun.sweeper.storage.JunkStats
+import com.supun.sweeper.storage.MalwareSignatures
 import com.supun.sweeper.storage.StorageBreakdown
 import com.supun.sweeper.storage.StorageRepository
 import com.supun.sweeper.storage.TrashSummary
@@ -51,6 +54,8 @@ import com.supun.sweeper.storage.VolumeInfo
 import com.supun.sweeper.util.formatBytes
 import com.supun.sweeper.util.usedFraction
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private data class Segment(val label: String, val bytes: Long, val fraction: Float, val color: Color)
 
@@ -69,6 +74,7 @@ fun HomeScreen(
     onOpenTrash: () -> Unit,
     onOpenDuplicates: () -> Unit,
     onOpenJunk: () -> Unit,
+    onOpenMalware: () -> Unit,
 ) {
     val context = LocalContext.current
     val repo = remember { StorageRepository(context) }
@@ -79,6 +85,19 @@ fun HomeScreen(
 
     val cleaner = remember { FileCleaner(context) }
     var trashSummary by remember { mutableStateOf(TrashSummary(0, 0)) }
+
+    // The signature date and count for the Malware card; null until the stored list has been read.
+    var signatureLine by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(resumeCount) {
+        signatureLine = withContext(Dispatchers.IO) {
+            val list = MalwareSignatures.store(context).current()
+            if (list == null) {
+                "No signatures yet — tap to download"
+            } else {
+                "Signatures from ${formatSignatureDate(list.createdAt)} · ${formatCount(list.count)} known samples"
+            }
+        }
+    }
 
     LaunchedEffect(Unit) { volume = repo.internalVolume() }
     // Refreshed whenever Home is shown again (e.g. back from the Trash screen).
@@ -116,6 +135,7 @@ fun HomeScreen(
             item { DuplicatesCard(DuplicateStats.wastedBytes, onOpenDuplicates) }
             item { TrashCard(trashSummary, onOpenTrash) }
             item { JunkCard(JunkStats.junkBytes, onOpenJunk) }
+            item { MalwareCard(signatureLine, onOpenMalware) }
             item {
                 TextButton(onClick = { openStorageSettings(context) }) {
                     Text("Open Android storage settings")
@@ -282,6 +302,19 @@ private fun JunkCard(junkBytes: Long?, onClick: () -> Unit) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.primary,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MalwareCard(signatureLine: String?, onClick: () -> Unit) {
+    Card(onClick = onClick, modifier = Modifier.fillMaxWidth().testTag("malware_card")) {
+        Column(Modifier.padding(16.dp)) {
+            Text("Malware check", style = MaterialTheme.typography.titleMedium)
+            Text("Compare apps and APK files with a list of known Android malware.", style = MaterialTheme.typography.bodyMedium)
+            if (signatureLine != null) {
+                Text(signatureLine, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
             }
         }
     }

@@ -27,12 +27,19 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Check network use
+        run: bash .github/scripts/check-network.sh
       - uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
       - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           distribution: temurin
           java-version: 17
           cache: gradle
+      - name: Build the sample signature file (Python writer, read by the Kotlin parser test)
+        run: |
+          mkdir -p app/src/test/resources
+          python3 -I tools/signatures/build_signatures.py tools/signatures/fixture.csv \
+            app/src/test/resources/sample-signatures.bin "$RUNNER_TEMP/fixture-info.json"
       - name: Decode signing key
         env:
           KEYSTORE_B64: ${{ secrets.SWEEPER_KEYSTORE_B64 }}

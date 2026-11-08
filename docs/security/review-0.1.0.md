@@ -1,5 +1,7 @@
 # Security review: Android Sweeper v0.1.0
 
+> Historical review of v0.1.0. Since v0.6.0 the app has the `INTERNET` permission for one purpose (downloading the signed malware signature list from one fixed address); `.github/scripts/check-network.sh` and `check-apk.sh` enforce that, see the README.
+
 Date: 2026-11-08. Scope: the repo at `3c784f8` (tag v0.1.0), its CI, every third-party component it pulls in, the released APK, the repo's GitHub settings, and the signing key on the build host.
 
 ## Method

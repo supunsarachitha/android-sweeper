@@ -206,6 +206,13 @@ class FileCleaner(context: Context) {
         result
     }
 
+    /** Moves files (given by path) to the trash; every path goes through the same safety checks as [moveToTrash]. */
+    suspend fun moveFilesToTrash(paths: List<String>): TrashResult = withContext(Dispatchers.IO) {
+        val result = trash.trash(paths.map { File(it) })
+        mediaScan(result.moved.flatMap { listOf(it.originalPath, trash.storedFile(it.id).path) })
+        result
+    }
+
     suspend fun trashItems(): List<TrashItem> = withContext(Dispatchers.IO) { trash.list() }
 
     suspend fun trashSummary(): TrashSummary = withContext(Dispatchers.IO) {
