@@ -78,5 +78,23 @@ adb shell "printf '$TRASHED\t%s000\t5242880\t/storage/emulated/0/Download/holida
 SHOT_WAIT=6 shot no trash-light.png --es open trash
 SHOT_WAIT=6 shot no home-trash-light.png
 
+# --- Phase 4: duplicates --------------------------------------------------------------------
+# Two pairs of identical files (2 MB and 500 KB) in different folders, made through the shell.
+DUP_BIG_A=/sdcard/Download/sweeper-dup-big.bin
+DUP_BIG_B=/sdcard/Pictures/sweeper-dup-big-copy.bin
+DUP_SMALL_A=/sdcard/Documents/sweeper-dup-notes.bin
+DUP_SMALL_B=/sdcard/Download/sweeper-dup-notes-copy.bin
+cleanup_files() {
+  adb shell "rm -f $BIG $OLD $APKCOPY $TRASH/$TRASHED $TRASH/index.tsv $TRASH/.nomedia; rmdir $TRASH" || true
+  adb shell "rm -f $DUP_BIG_A $DUP_BIG_B $DUP_SMALL_A $DUP_SMALL_B" || true
+}
+adb shell "mkdir -p /sdcard/Pictures /sdcard/Documents"
+adb shell "dd if=/dev/urandom of=$DUP_BIG_A bs=1024 count=2048 && cp $DUP_BIG_A $DUP_BIG_B"
+adb shell "dd if=/dev/urandom of=$DUP_SMALL_A bs=1024 count=500 && cp $DUP_SMALL_A $DUP_SMALL_B"
+
+SHOT_WAIT=15 shot no duplicates-light.png --es open duplicates
+SHOT_WAIT=15 shot no duplicates-selected-light.png --es open duplicates --es demo keepoldest
+SHOT_WAIT=15 shot yes duplicates-dark.png --es open duplicates
+
 adb shell cmd uimode night no
 adb shell appops set --uid "$PKG" MANAGE_EXTERNAL_STORAGE default

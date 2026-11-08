@@ -323,7 +323,7 @@ fun FilesScreen(resumeCount: Int, initialTab: Int, onBack: () -> Unit) {
 }
 
 @Composable
-private fun AllFilesAccessCard(onAllow: () -> Unit) {
+internal fun AllFilesAccessCard(onAllow: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("all_files_access_card")) {
         Column(Modifier.padding(16.dp)) {
             Text("All files access needed", style = MaterialTheme.typography.titleMedium)

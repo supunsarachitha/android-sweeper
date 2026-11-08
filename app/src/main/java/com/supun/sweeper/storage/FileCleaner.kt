@@ -5,12 +5,17 @@ import android.content.pm.PackageManager
 import android.media.MediaScannerConnection
 import android.os.Environment
 import androidx.core.content.pm.PackageInfoCompat
+import com.supun.sweeper.files.DuplicateFinder
+import com.supun.sweeper.files.DuplicateGroup
+import com.supun.sweeper.files.DuplicateResult
+import com.supun.sweeper.files.DuplicateSelection
 import com.supun.sweeper.files.FileScanner
 import com.supun.sweeper.files.FoundFile
 import com.supun.sweeper.files.ScanCandidates
 import com.supun.sweeper.files.Trash
 import com.supun.sweeper.files.TrashItem
 import com.supun.sweeper.files.TrashResult
+import com.supun.sweeper.files.planDuplicateTrash
 import java.io.File
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.Dispatchers
@@ -18,6 +23,14 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
 
 data class TrashSummary(val count: Int, val bytes: Long)
+
+/** Outcome of trashing duplicates: [trash] is what Trash did; [heldBack] files were not even offered to it. */
+data class DuplicateMove(val trash: TrashResult, val heldBack: Int)
+
+/** What the last duplicate scan of this app session found, for the Home card. Lost when the process dies. */
+object DuplicateStats {
+    @Volatile var wastedBytes: Long? = null
+}
 
 /** What the user sees for an APK file: its app name and version, and whether it is already installed. */
 data class ApkInfo(val label: String, val versionName: String, val installed: Boolean)
@@ -37,6 +50,26 @@ class FileCleaner(context: Context) {
         FileScanner(root) { System.currentTimeMillis() }
             .scan(isCancelled = { job?.isActive == false }, onProgress = onProgress)
     }
+
+    /** Finds identical files. Cancelling the calling coroutine stops the scan. */
+    suspend fun findDuplicates(onProgress: (stage: Int, done: Int, total: Int) -> Unit): DuplicateResult =
+        withContext(Dispatchers.IO) {
+            val job = coroutineContext[Job]
+            DuplicateFinder(root) { System.currentTimeMillis() }
+                .find(isCancelled = { job?.isActive == false }, onProgress = onProgress)
+        }
+
+    /**
+     * Moves the selected duplicates to the trash. Throws [IllegalStateException] (nothing is touched) if the
+     * selection would remove every copy of a file; groups whose kept copy has vanished are held back.
+     */
+    suspend fun trashDuplicates(groups: List<DuplicateGroup>, selection: DuplicateSelection): DuplicateMove =
+        withContext(Dispatchers.IO) {
+            val plan = planDuplicateTrash(groups, selection)
+            val result = trash.trash(plan.toTrash.map { File(it.path) })
+            mediaScan(result.moved.flatMap { listOf(it.originalPath, trash.storedFile(it.id).path) })
+            DuplicateMove(result, plan.skipped.size)
+        }
 
     suspend fun moveToTrash(files: List<FoundFile>): TrashResult = withContext(Dispatchers.IO) {
         val result = trash.trash(files.map { File(it.path) })
