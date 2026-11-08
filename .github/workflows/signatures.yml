@@ -1,12 +1,14 @@
 name: Malware signatures
 
-# Builds the known-malware hash list the app downloads: the Android samples (APK/DEX) from the
-# MalwareBazaar full export (abuse.ch, CC0), in the format of tools/signatures/sigformat.py, signed with
-# ECDSA P-256. The result replaces the "signatures" branch (one commit, no history), which the app reads from
+# Builds the known-malware hash list the app downloads: Android samples (APK/DEX) from MalwareBazaar
+# (abuse.ch, CC0), in the format of tools/signatures/sigformat.py, signed with ECDSA P-256.
+# The list grows over time: each daily run merges the last 48 hours (recent.csv), the newest APK/DEX samples
+# from the API and, when it downloads completely, the full export, into the published list (whose signature is
+# checked first). The result replaces the "signatures" branch (one commit, no history), which the app reads from
 # https://raw.githubusercontent.com/supunsarachitha/android-sweeper/signatures/signatures.bin
 on:
   schedule:
-    - cron: '23 4 * * 1'
+    - cron: '23 4 * * *'
   workflow_dispatch:
 
 permissions:
@@ -27,7 +29,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Download the MalwareBazaar export
+      - name: Download MalwareBazaar data
         env:
           AUTH_KEY: ${{ secrets.ABUSECH_AUTH_KEY }}
         run: |
@@ -37,32 +39,61 @@ jobs:
           fi
           mkdir -p export
           BASE="https://mb-api.abuse.ch/v2/files/exports/${AUTH_KEY}"
-          # Prints status, size and the start of the reply when a download fails; long tokens are hidden.
-          probe() {
-            echo "--- probe: $1"
-            curl -sS --http1.1 --max-time 120 -D "export/$1.h" -o "export/$1.b" \
-              -w "http=%{http_code} bytes=%{size_download} type=%{content_type}\n" "$BASE/$1" || echo "curl exit $?"
-            sed -E 's/[A-Za-z0-9_-]{24,}/<hidden>/g' "export/$1.h" 2>/dev/null | head -15 || true
-            head -c 400 "export/$1.b" 2>/dev/null | tr -c '[:print:]\n' '.' | sed -E 's/[A-Za-z0-9_-]{24,}/<hidden>/g' | head -8 || true
-            echo
-          }
-          # HTTP/1.1: the large export broke off mid-stream over HTTP/2 (curl error 92).
-          if ! curl -fsS --http1.1 --retry 4 --retry-all-errors --retry-delay 20 --max-time 1200 \
-                -o export/full.zip "$BASE/full.csv.zip"; then
-            echo "::error::Downloading the full export failed; diagnostics follow"
-            probe recent.csv
-            probe full.csv.zip
+          # Last 48 hours: small and reliable. Required.
+          curl -fsS --http1.1 --retry 4 --retry-all-errors --retry-delay 20 --max-time 300 \
+            -o export/recent.csv "$BASE/recent.csv"
+          # Newest APK/DEX samples from the API (backfill). Optional.
+          for type in apk dex; do
+            curl -fsS --http1.1 --retry 3 --retry-all-errors --retry-delay 20 --max-time 120 \
+              -H "Auth-Key: ${AUTH_KEY}" --data "query=get_file_type&file_type=${type}&limit=1000" \
+              -o "export/api-${type}.json" https://mb-api.abuse.ch/api/v1/ \
+              || { echo "::warning::API query for ${type} failed"; rm -f "export/api-${type}.json"; }
+          done
+          # Full export: the server tends to cut this stream off, so it is a bonus when it works.
+          if curl -fsS --http1.1 --max-time 600 -o export/full.zip "$BASE/full.csv.zip" \
+              && python3 -I -m zipfile -t export/full.zip >/dev/null; then
+            python3 -I -m zipfile -e export/full.zip export/full/
+          else
+            echo "::warning::Full export not available this run (download incomplete); using recent data only"
+            rm -rf export/full.zip export/full
+          fi
+          ls -l export export/full 2>/dev/null || true
+      - name: Fetch and check the published list
+        run: |
+          RAW="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/signatures"
+          code=$(curl -sS -o prev.bin -w '%{http_code}' "$RAW/signatures.bin")
+          if [ "$code" = 404 ]; then
+            echo "No published list yet; starting a new one."
+            rm -f prev.bin
+          elif [ "$code" = 200 ]; then
+            curl -fsS -o prev.bin.sig "$RAW/signatures.bin.sig"
+            if ! openssl dgst -sha256 -verify .github/signatures-public.pem -signature prev.bin.sig prev.bin; then
+              echo "::error::The published list does not verify; not merging into it"
+              exit 1
+            fi
+          else
+            echo "::error::Unexpected answer $code for the published list"
             exit 1
           fi
-          python3 -I -m zipfile -l export/full.zip
-          python3 -I -m zipfile -e export/full.zip export/
       - name: Build the Android hash list
+        id: build
         run: |
           mkdir -p out
-          CSV=$(ls export/*.csv | head -1)
-          python3 -I tools/signatures/build_signatures.py "$CSV" out/signatures.bin out/info.json \
+          args=()
+          [ -f prev.bin ] && args+=(--previous prev.bin)
+          for f in export/recent.csv export/full/*.csv; do [ -f "$f" ] && args+=(--csv "$f"); done
+          for f in export/api-*.json; do [ -f "$f" ] && args+=(--api-json "$f"); done
+          python3 -I tools/signatures/build_signatures.py out/signatures.bin out/info.json "${args[@]}" \
             --previous-info "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/signatures/info.json"
+          new=$(python3 -I -c "import json;print(json.load(open('out/info.json'))['count'])")
+          old=0
+          if [ -f prev.bin ]; then
+            old=$(python3 -I -c "import sys;sys.path.insert(0,'tools/signatures');from sigformat import decode;print(len(decode(open('prev.bin','rb').read())[1]))")
+          fi
+          echo "entries: $old -> $new"
+          if [ "$new" = "$old" ]; then echo "changed=false" >> "$GITHUB_OUTPUT"; else echo "changed=true" >> "$GITHUB_OUTPUT"; fi
       - name: Sign and verify
+        if: steps.build.outputs.changed == 'true'
         env:
           SIGNING_KEY: ${{ secrets.SIGNATURES_SIGNING_KEY }}
         run: |
@@ -72,6 +103,7 @@ jobs:
           rm -f "$RUNNER_TEMP/sig-key.pem"
           openssl dgst -sha256 -verify .github/signatures-public.pem -signature out/signatures.bin.sig out/signatures.bin
       - name: Publish to the signatures branch
+        if: steps.build.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -79,9 +111,9 @@ jobs:
           {
             echo "# Android Sweeper malware signatures"
             echo ""
-            echo "Built $(date -u '+%Y-%m-%d %H:%M UTC') by the \"Malware signatures\" workflow on main. Replaced weekly; no history."
+            echo "Built $(date -u '+%Y-%m-%d %H:%M UTC') by the \"Malware signatures\" workflow on main. Replaced on every change; no history."
             echo ""
-            echo "- \`signatures.bin\`: SHA-256 hashes of known Android malware (APK/DEX) from MalwareBazaar (abuse.ch, CC0). Format: tools/signatures/sigformat.py on main."
+            echo "- \`signatures.bin\`: SHA-256 hashes of known Android malware (APK/DEX) from MalwareBazaar (abuse.ch, CC0), accumulated daily. Format: tools/signatures/sigformat.py on main."
             echo "- \`signatures.bin.sig\`: ECDSA P-256 / SHA-256 signature (DER) over signatures.bin."
             echo "- \`signatures-public.pem\`: the verification key (the app has its own built-in copy)."
             echo "- \`info.json\`: build time, entry count, SHA-256."

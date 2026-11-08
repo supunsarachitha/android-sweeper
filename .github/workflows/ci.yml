@@ -38,8 +38,9 @@ jobs:
       - name: Build the sample signature file (Python writer, read by the Kotlin parser test)
         run: |
           mkdir -p app/src/test/resources
-          python3 -I tools/signatures/build_signatures.py tools/signatures/fixture.csv \
-            app/src/test/resources/sample-signatures.bin "$RUNNER_TEMP/fixture-info.json"
+          python3 -I tools/signatures/build_signatures.py \
+            app/src/test/resources/sample-signatures.bin "$RUNNER_TEMP/fixture-info.json" \
+            --csv tools/signatures/fixture.csv
       - name: Decode signing key
         env:
           KEYSTORE_B64: ${{ secrets.SWEEPER_KEYSTORE_B64 }}
