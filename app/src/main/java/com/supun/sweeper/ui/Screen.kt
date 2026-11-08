@@ -9,6 +9,7 @@ sealed interface Screen {
     data object Files : Screen
     data object Trash : Screen
     data object Duplicates : Screen
+    data object Junk : Screen
 }
 
 /** Lets the current screen survive rotation and process death. */
@@ -20,6 +21,7 @@ val ScreenSaver: Saver<Screen, String> = Saver(
             Screen.Files -> "files"
             Screen.Trash -> "trash"
             Screen.Duplicates -> "duplicates"
+            Screen.Junk -> "junk"
         }
     },
     restore = {
@@ -28,6 +30,7 @@ val ScreenSaver: Saver<Screen, String> = Saver(
             "files" -> Screen.Files
             "trash" -> Screen.Trash
             "duplicates" -> Screen.Duplicates
+            "junk" -> Screen.Junk
             else -> Screen.Home
         }
     },
