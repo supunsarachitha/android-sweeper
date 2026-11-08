@@ -8,19 +8,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -29,10 +27,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.supun.sweeper.R
@@ -47,7 +45,6 @@ private sealed interface PendingConfirm {
     data class DeleteOne(val item: TrashItem) : PendingConfirm
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TrashScreen(resumeCount: Int, onBack: () -> Unit) {
     val context = LocalContext.current
@@ -71,13 +68,9 @@ fun TrashScreen(resumeCount: Int, onBack: () -> Unit) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Trash") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Back")
-                    }
-                },
+            SweeperTopBar(
+                "Trash",
+                onBack = onBack,
                 actions = {
                     TextButton(
                         onClick = { pending = PendingConfirm.EmptyAll },
@@ -91,17 +84,19 @@ fun TrashScreen(resumeCount: Int, onBack: () -> Unit) {
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             if (!granted) {
-                Text(
-                    "All files access is off. Turn it on from Large & old files to manage the trash.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(16.dp),
-                )
+                InfoCard(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        "All files access is off. Turn it on from Large & old files to manage the trash.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
             if (list != null && list.isEmpty()) {
-                Text(
-                    "The trash is empty. Files you remove are kept here for 7 days.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(16.dp).testTag("trash_empty"),
+                EmptyState(
+                    icon = R.drawable.ic_trash,
+                    title = "The trash is empty",
+                    body = "Files you remove are kept here for 7 days.",
+                    modifier = Modifier.testTag("trash_empty"),
                 )
             }
             LazyColumn(
@@ -122,6 +117,7 @@ fun TrashScreen(resumeCount: Int, onBack: () -> Unit) {
                         },
                         onDelete = { pending = PendingConfirm.DeleteOne(item) },
                     )
+                    HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
                 }
             }
         }
@@ -173,19 +169,25 @@ private fun TrashRow(item: TrashItem, folder: String, now: Long, onRestore: () -
             .testTag("trash_row_${item.name}")
             .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
-        Text(item.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(
-            folder,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            "${formatBytes(item.size)} · $expiry",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Row(verticalAlignment = Alignment.Top) {
+            Column(Modifier.weight(1f)) {
+                Text(item.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    folder,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.MiddleEllipsis,
+                )
+                Text(
+                    expiry,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Text(nbBytes(item.size), style = MaterialTheme.typography.titleSmall)
+        }
         Spacer(Modifier.height(2.dp))
         Row {
             TextButton(onClick = onRestore, modifier = Modifier.testTag("restore_button_${item.name}")) { Text("Restore") }
