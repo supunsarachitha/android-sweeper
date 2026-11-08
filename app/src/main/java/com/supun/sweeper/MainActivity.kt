@@ -61,7 +61,12 @@ class MainActivity : ComponentActivity() {
         // scan on the Malware screen. "--es demo restricted" shows the restricted-settings help expanded.
         val demoMalware = BuildConfig.DEBUG && intent.getStringExtra("demo") == "malware"
         val demoRestricted = BuildConfig.DEBUG && intent.getStringExtra("demo") == "restricted"
+        // "--es demo deep" does the same for the deep scan: a demo ALL list, then a deep scan on the Malware screen.
+        // "--es scroll deep" only scrolls the Malware screen to the deep-scan card.
+        val demoDeep = BuildConfig.DEBUG && intent.getStringExtra("demo") == "deep"
+        val scrollToDeep = BuildConfig.DEBUG && (demoDeep || intent.getStringExtra("scroll") == "deep")
         if (BuildConfig.DEBUG && demoMalware) DemoHook.install(applicationContext, intent.getStringExtra("demohash"))
+        if (BuildConfig.DEBUG && demoDeep) DemoHook.installDeep(applicationContext, intent.getStringExtra("demohash"))
         // Trash items older than 7 days are deleted at app start.
         lifecycleScope.launch(Dispatchers.IO) {
             try {
@@ -108,6 +113,8 @@ class MainActivity : ComponentActivity() {
                         Screen.Malware -> MalwareScreen(
                             resumeCount = resumeCount,
                             autoScan = demoMalware,
+                            autoDeepScan = demoDeep,
+                            scrollToDeep = scrollToDeep,
                             onBack = { screen = Screen.Home },
                         )
                         Screen.Trash -> TrashScreen(

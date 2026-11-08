@@ -6,4 +6,7 @@ import android.content.Context
 object DemoHook {
     @Suppress("UNUSED_PARAMETER")
     fun install(context: Context, fileHash: String?) = Unit
+
+    @Suppress("UNUSED_PARAMETER")
+    fun installDeep(context: Context, fileHash: String?) = Unit
 }
