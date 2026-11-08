@@ -27,14 +27,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -42,7 +43,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -60,6 +60,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
@@ -84,7 +85,7 @@ private val sortLabels = listOf(
     AppSort.TOTAL to "Total",
     AppSort.CACHE to "Cache",
     AppSort.DATA to "Data",
-    AppSort.APP to "App size",
+    AppSort.APP to "App",
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -177,16 +178,7 @@ fun AppsScreen(resumeCount: Int, onBack: () -> Unit, initialSelection: String = 
     }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Apps") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Back")
-                    }
-                },
-            )
-        },
+        topBar = { SweeperTopBar("Apps", onBack = onBack) },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             val loaded = apps
@@ -236,11 +228,14 @@ fun AppsScreen(resumeCount: Int, onBack: () -> Unit, initialSelection: String = 
                             AppsHeader(count = visible.size, cacheTotal = totalCache(visible))
                             SortChips(sort) { sort = it }
                             Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .toggleable(value = showSystem, role = Role.Switch, onValueChange = { showSystem = it })
+                                    .padding(horizontal = 16.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Text("Show system apps", modifier = Modifier.weight(1f))
-                                Switch(checked = showSystem, onCheckedChange = { showSystem = it })
+                                Text("Show system apps", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                                Switch(checked = showSystem, onCheckedChange = null)
                             }
                         }
                         if (clearAllAvailable) {
@@ -275,7 +270,7 @@ fun AppsScreen(resumeCount: Int, onBack: () -> Unit, initialSelection: String = 
                             )
                         }
                         if (visible.isEmpty()) {
-                            item(key = "empty") { Text("No apps to show", modifier = Modifier.padding(16.dp)) }
+                            item(key = "empty") { EmptyState(icon = R.drawable.ic_apps, title = "No apps to show") }
                         }
                         items(visible, key = { it.packageName }) { app ->
                             AppRow(
@@ -304,30 +299,40 @@ private fun clearAllCachesAvailable(context: Context): Boolean =
 
 @Composable
 private fun ClearAllCard(cacheTotal: Long, filesGranted: Boolean, onAllow: () -> Unit, onClearAll: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).testTag("clear_all_card")) {
-        Column(Modifier.padding(16.dp)) {
-            Text("Clear all app caches", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(4.dp))
+    var howOpen by rememberSaveable { mutableStateOf(false) }
+    InfoCard(
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).testTag("clear_all_card"),
+        icon = null,
+    ) {
+        Text("Clear all app caches", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(2.dp))
+        Text(
+            "Clears every app's cache in one go. Your data, logins and files are not touched.",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        TextButton(onClick = { howOpen = !howOpen }, modifier = Modifier.testTag("clear_all_how")) {
+            Text(if (howOpen) "Hide details" else "How it works")
+        }
+        if (howOpen) {
             Text(
                 "Android clears the cache of every app at once after you confirm. Apps rebuild their cache " +
-                    "as you use them; data, logins and files are not touched.",
+                    "as you use them.",
                 style = MaterialTheme.typography.bodyMedium,
             )
-            Spacer(Modifier.height(12.dp))
-            if (filesGranted) {
-                Button(onClick = onClearAll, modifier = Modifier.testTag("clear_all_button")) {
-                    Text("Clear all caches (${formatBytes(cacheTotal)})")
-                }
-            } else {
-                Text(
-                    "Android only offers this to apps with All files access.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = onAllow, modifier = Modifier.testTag("clear_all_allow")) {
-                    Text("Allow All files access")
-                }
+            Spacer(Modifier.height(8.dp))
+        }
+        if (filesGranted) {
+            Button(onClick = onClearAll, modifier = Modifier.testTag("clear_all_button")) {
+                Text("Clear all caches (${nbBytes(cacheTotal)})")
+            }
+        } else {
+            Text(
+                "Android only offers this to apps with All files access.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = onAllow, modifier = Modifier.testTag("clear_all_allow")) {
+                Text("Allow All files access")
             }
         }
     }
@@ -368,7 +373,7 @@ private fun QueueCard(
 ) {
     val pkg = queue.current ?: return
     val total = queue.packages.size
-    Card(modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("cache_queue_card")) {
+    Card(modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("cache_queue_card"), colors = sweeperCardColors()) {
         Column(Modifier.padding(16.dp)) {
             Text("Clearing caches · ${queue.position + 1} of $total", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
@@ -400,25 +405,25 @@ private fun QueueCard(
 
 @Composable
 private fun SummaryCard(label: String, before: Long, after: Long?, onDismiss: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).testTag("cache_summary")) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                if (after == null) {
-                    "$label: ${formatBytes(before)} before · checking…"
-                } else {
-                    "$label: ${formatBytes(before)} → ${formatBytes(after)} (${formatBytes((before - after).coerceAtLeast(0))} freed)"
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f),
-            )
-            TextButton(onClick = onDismiss) { Text("OK") }
-        }
+    InfoCard(
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).testTag("cache_summary"),
+        onDismiss = onDismiss,
+    ) {
+        Text(
+            if (after == null) {
+                "$label: ${nbBytes(before)} before · checking…"
+            } else {
+                "$label: ${nbBytes(before)} → ${nbBytes(after)} (${nbBytes((before - after).coerceAtLeast(0))} freed)"
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(top = 2.dp),
+        )
     }
 }
 
 @Composable
 private fun PermissionCard(onOpenSettings: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("usage_access_card")) {
+    Card(modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("usage_access_card"), colors = sweeperCardColors()) {
         Column(Modifier.padding(16.dp)) {
             Text("Usage access needed", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
@@ -461,20 +466,34 @@ private fun AppsHeader(count: Int, cacheTotal: Long) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SortChips(selected: AppSort, onSelect: (AppSort) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         sortLabels.forEach { (sort, label) ->
+            val isSelected = selected == sort
             FilterChip(
-                selected = selected == sort,
+                selected = isSelected,
                 onClick = { onSelect(sort) },
                 label = { Text(label) },
+                leadingIcon = if (isSelected) {
+                    {
+                        Icon(
+                            painterResource(R.drawable.ic_check),
+                            contentDescription = null,
+                            modifier = Modifier.size(FilterChipDefaults.IconSize),
+                        )
+                    }
+                } else {
+                    null
+                },
             )
         }
     }
@@ -498,17 +517,26 @@ private fun AppRow(app: AppStorage, checked: Boolean, onCheckedChange: (Boolean)
         AppIcon(app.packageName)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(app.label, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    app.label,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(nbBytes(app.totalBytes), style = MaterialTheme.typography.titleMedium, maxLines = 1)
+            }
+            // Number and unit are joined with a no-break space, so a wrap can only fall between the three parts.
             Text(
-                "App ${formatBytes(app.appBytes)} · Data ${formatBytes(app.dataBytes)} · Cache ${formatBytes(app.cacheBytes)}",
-                style = MaterialTheme.typography.bodySmall,
+                "App ${nbBytes(app.appBytes)} · Data ${nbBytes(app.dataBytes)} · Cache ${nbBytes(app.cacheBytes)}",
+                style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Spacer(Modifier.width(12.dp))
-        Text(formatBytes(app.totalBytes), style = MaterialTheme.typography.titleSmall)
     }
 }
 
