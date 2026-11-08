@@ -1,11 +1,13 @@
 name: Malware signatures
 
-# Builds the known-malware hash list the app downloads: Android samples (APK/DEX) from MalwareBazaar
-# (abuse.ch, CC0), in the format of tools/signatures/sigformat.py, signed with ECDSA P-256.
-# The list grows over time: each daily run merges the last 48 hours (recent.csv), the newest APK/DEX samples
-# from the API and, when it downloads completely, the full export, into the published list (whose signature is
-# checked first). The result replaces the "signatures" branch (one commit, no history), which the app reads from
-# https://raw.githubusercontent.com/supunsarachitha/android-sweeper/signatures/signatures.bin
+# Builds the two signed hash lists the app downloads, from MalwareBazaar (abuse.ch, CC0), in the format of
+# tools/signatures/sigformat.py, signed with ECDSA P-256:
+#   signatures.bin      Android samples (APK/DEX): the quick malware check
+#   signatures-all.bin  every file type (Windows programs, documents, scripts, archives...): the deep scan
+# The lists grow over time: each daily run merges the last 48 hours (recent.csv), the newest samples per file
+# type from the API and, when it downloads completely, the full export into the published lists (whose
+# signatures are checked first). The result replaces the "signatures" branch (one commit, no history), which
+# the app reads from https://raw.githubusercontent.com/supunsarachitha/android-sweeper/signatures/<file>
 on:
   schedule:
     - cron: '23 4 * * *'
@@ -22,7 +24,7 @@ jobs:
   build:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     permissions:
       contents: write
     steps:
@@ -39,15 +41,16 @@ jobs:
           fi
           mkdir -p export
           BASE="https://mb-api.abuse.ch/v2/files/exports/${AUTH_KEY}"
-          # Last 48 hours: small and reliable. Required.
+          # Last 48 hours, all file types: small and reliable. Required.
           curl -fsS --http1.1 --retry 4 --retry-all-errors --retry-delay 20 --max-time 300 \
             -o export/recent.csv "$BASE/recent.csv"
-          # Newest APK/DEX samples from the API (backfill). Optional.
-          for type in apk dex; do
+          # Newest 1000 samples per file type from the API (backfill). Optional; unknown types answer no_results.
+          for type in apk dex exe dll msi elf sh doc docx docm xls xlsx xlsm ppt pptx rtf pdf one js vbs ps1 bat hta lnk jar zip rar 7z gz iso img html svg; do
             curl -fsS --http1.1 --retry 3 --retry-all-errors --retry-delay 20 --max-time 120 \
               -H "Auth-Key: ${AUTH_KEY}" --data "query=get_file_type&file_type=${type}&limit=1000" \
               -o "export/api-${type}.json" https://mb-api.abuse.ch/api/v1/ \
               || { echo "::warning::API query for ${type} failed"; rm -f "export/api-${type}.json"; }
+            sleep 1
           done
           # Full export: the server tends to cut this stream off, so it is a bonus when it works.
           if curl -fsS --http1.1 --max-time 600 -o export/full.zip "$BASE/full.csv.zip" \
@@ -58,40 +61,55 @@ jobs:
             rm -rf export/full.zip export/full
           fi
           ls -l export export/full 2>/dev/null || true
-      - name: Fetch and check the published list
-        run: |
-          RAW="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/signatures"
-          code=$(curl -sS -o prev.bin -w '%{http_code}' "$RAW/signatures.bin")
-          if [ "$code" = 404 ]; then
-            echo "No published list yet; starting a new one."
-            rm -f prev.bin
-          elif [ "$code" = 200 ]; then
-            curl -fsS -o prev.bin.sig "$RAW/signatures.bin.sig"
-            if ! openssl dgst -sha256 -verify .github/signatures-public.pem -signature prev.bin.sig prev.bin; then
-              echo "::error::The published list does not verify; not merging into it"
-              exit 1
-            fi
-          else
-            echo "::error::Unexpected answer $code for the published list"
-            exit 1
-          fi
-      - name: Build the Android hash list
+      - name: Build both lists
         id: build
         run: |
-          mkdir -p out
-          args=()
-          [ -f prev.bin ] && args+=(--previous prev.bin)
-          for f in export/recent.csv export/full/*.csv; do [ -f "$f" ] && args+=(--csv "$f"); done
-          for f in export/api-*.json; do [ -f "$f" ] && args+=(--api-json "$f"); done
-          python3 -I tools/signatures/build_signatures.py out/signatures.bin out/info.json "${args[@]}" \
-            --previous-info "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/signatures/info.json"
-          new=$(python3 -I -c "import json;print(json.load(open('out/info.json'))['count'])")
-          old=0
-          if [ -f prev.bin ]; then
-            old=$(python3 -I -c "import sys;sys.path.insert(0,'tools/signatures');from sigformat import decode;print(len(decode(open('prev.bin','rb').read())[1]))")
-          fi
-          echo "entries: $old -> $new"
-          if [ "$new" = "$old" ]; then echo "changed=false" >> "$GITHUB_OUTPUT"; else echo "changed=true" >> "$GITHUB_OUTPUT"; fi
+          RAW="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/signatures"
+          mkdir -p out prev
+          inputs=()
+          for f in export/recent.csv export/full/*.csv; do [ -f "$f" ] && inputs+=(--csv "$f"); done
+          for f in export/api-*.json; do [ -f "$f" ] && inputs+=(--api-json "$f"); done
+          changed=false
+          # build <file base name> <info name> <types>
+          build() {
+            local name=$1 info=$2 types=$3 args=() code old new
+            code=$(curl -sS -o "prev/$name.bin" -w '%{http_code}' "$RAW/$name.bin")
+            if [ "$code" = 200 ]; then
+              curl -fsS -o "prev/$name.bin.sig" "$RAW/$name.bin.sig"
+              if ! openssl dgst -sha256 -verify .github/signatures-public.pem -signature "prev/$name.bin.sig" "prev/$name.bin"; then
+                echo "::error::The published $name.bin does not verify; not merging into it"
+                exit 1
+              fi
+              curl -fsS -o "prev/$info" "$RAW/$info" || true
+              args+=(--previous "prev/$name.bin")
+            elif [ "$code" = 404 ]; then
+              echo "No published $name.bin yet; starting a new one."
+              rm -f "prev/$name.bin"
+            else
+              echo "::error::Unexpected answer $code for $name.bin"
+              exit 1
+            fi
+            python3 -I tools/signatures/build_signatures.py "out/$name.bin" "out/$info" "${args[@]}" "${inputs[@]}" \
+              --types "$types" --previous-info "$RAW/$info"
+            new=$(python3 -I -c "import json;print(json.load(open('out/$info'))['count'])")
+            old=0
+            if [ -f "prev/$name.bin" ]; then
+              old=$(python3 -I -c "import sys;sys.path.insert(0,'tools/signatures');from sigformat import decode;print(len(decode(open('prev/$name.bin','rb').read())[1]))")
+            fi
+            echo "$name: $old -> $new entries"
+            if [ "$new" = "$old" ]; then
+              # Unchanged: republish the previous file byte for byte, so phones don't download it again.
+              cp "prev/$name.bin" "out/$name.bin"
+              cp "prev/$name.bin.sig" "out/$name.bin.sig"
+              [ -f "prev/$info" ] && cp "prev/$info" "out/$info"
+            else
+              changed=true
+              touch "out/$name.needs-signing"
+            fi
+          }
+          build signatures info.json android
+          build signatures-all info-all.json all
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
       - name: Sign and verify
         if: steps.build.outputs.changed == 'true'
         env:
@@ -99,9 +117,16 @@ jobs:
         run: |
           umask 077
           printf '%s\n' "$SIGNING_KEY" > "$RUNNER_TEMP/sig-key.pem"
-          openssl dgst -sha256 -sign "$RUNNER_TEMP/sig-key.pem" -out out/signatures.bin.sig out/signatures.bin
+          for name in signatures signatures-all; do
+            if [ -f "out/$name.needs-signing" ]; then
+              openssl dgst -sha256 -sign "$RUNNER_TEMP/sig-key.pem" -out "out/$name.bin.sig" "out/$name.bin"
+              rm "out/$name.needs-signing"
+            fi
+          done
           rm -f "$RUNNER_TEMP/sig-key.pem"
-          openssl dgst -sha256 -verify .github/signatures-public.pem -signature out/signatures.bin.sig out/signatures.bin
+          for name in signatures signatures-all; do
+            openssl dgst -sha256 -verify .github/signatures-public.pem -signature "out/$name.bin.sig" "out/$name.bin"
+          done
       - name: Publish to the signatures branch
         if: steps.build.outputs.changed == 'true'
         env:
@@ -113,10 +138,13 @@ jobs:
             echo ""
             echo "Built $(date -u '+%Y-%m-%d %H:%M UTC') by the \"Malware signatures\" workflow on main. Replaced on every change; no history."
             echo ""
-            echo "- \`signatures.bin\`: SHA-256 hashes of known Android malware (APK/DEX) from MalwareBazaar (abuse.ch, CC0), accumulated daily. Format: tools/signatures/sigformat.py on main."
-            echo "- \`signatures.bin.sig\`: ECDSA P-256 / SHA-256 signature (DER) over signatures.bin."
+            echo "- \`signatures.bin\`: SHA-256 hashes of known Android malware (APK/DEX). Used by the quick malware check."
+            echo "- \`signatures-all.bin\`: SHA-256 hashes of known malware of every file type. Used by the deep scan."
+            echo "- \`*.bin.sig\`: ECDSA P-256 / SHA-256 signatures (DER) over each list."
             echo "- \`signatures-public.pem\`: the verification key (the app has its own built-in copy)."
-            echo "- \`info.json\`: build time, entry count, SHA-256."
+            echo "- \`info.json\`, \`info-all.json\`: build time, entry count, SHA-256."
+            echo ""
+            echo "Source: MalwareBazaar (abuse.ch), CC0, accumulated daily. Format: tools/signatures/sigformat.py on main."
           } > out/README.md
           cd out
           git init -q -b signatures
@@ -125,4 +153,4 @@ jobs:
           git add -A
           git commit -q -m "Signatures $(date -u +%Y-%m-%d)"
           git push --force --quiet "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:signatures
-          cat info.json
+          cat info.json info-all.json
