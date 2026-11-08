@@ -111,3 +111,7 @@ push it, download the `verification-metadata` artifact from the "Dependency veri
 metadata" run, review the diff, commit the file to your branch, then delete the `deps/<name>`
 branch. Every `uses:` in the workflows is pinned to a full commit SHA, and a new Android
 permission has to be added to the allowlist in `.github/scripts/check-apk.sh` with a reason.
+
+## License
+
+MIT, see [LICENSE](LICENSE).

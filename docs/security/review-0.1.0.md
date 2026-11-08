@@ -70,7 +70,7 @@ No vulnerability was found in the code that ships inside the APK (0 advisories a
 - **Fix:** enable Dependabot alerts (alerts only; version-update PRs stay off per owner policy) and add `gradle/actions/dependency-submission` on pushes to `main`.
 
 ### 7. Signing key availability (Low)
-- `sweeper.p12` and `password.txt` exist only in `~/.hermes/home/android-sweeper-signing/` (dir 700, files 600), apart from the CI secrets. GitHub secrets can't be read back. No other copies were found on the host or in history.
+- `sweeper.p12` and `password.txt` exist only in a private folder on the build host (dir 700, files 600), apart from the CI secrets. GitHub secrets can't be read back. No other copies were found on the host or in history.
 - If the folder is lost, future APKs won't install over the current one. You'd have to uninstall, which wipes app data.
 - **Fix (owner):** copy both files to an offline backup or password manager.
 
