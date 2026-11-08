@@ -9,6 +9,10 @@ BT="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail 
 ALLOWED_PERMISSIONS=(
   # AndroidX: lets dynamically registered receivers stay private to this app.
   com.supun.sweeper.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+  # Usage access: lets StorageStatsManager report how much space each other app uses (read-only).
+  android.permission.PACKAGE_USAGE_STATS
+  # Android 11+ package visibility: needed to list all installed apps (sideloaded app, not on Play).
+  android.permission.QUERY_ALL_PACKAGES
 )
 
 fail=0
