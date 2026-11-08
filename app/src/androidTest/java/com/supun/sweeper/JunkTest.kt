@@ -57,10 +57,12 @@ class JunkTest {
     @Before fun setUp() {
         shell("appops set --uid com.supun.sweeper MANAGE_EXTERNAL_STORAGE allow")
         shell("mkdir -p $emptyDir/a/b")
-        shell("echo junk > $tmpPath")
+        shell("dd if=/dev/urandom of=$tmpPath bs=1024 count=4") // no shell redirects: the command may not run through sh
         shell("mkdir -p $thumbDir")
-        shell("echo thumb > $thumbPath")
-        assertTrue(exists("$emptyDir/a/b") && exists(tmpPath) && exists(thumbPath))
+        shell("dd if=/dev/urandom of=$thumbPath bs=1024 count=4")
+        assertTrue("empty dir chain was not created", exists("$emptyDir/a/b"))
+        assertTrue("tmp file was not created", exists(tmpPath))
+        assertTrue("thumbnail was not created", exists(thumbPath))
         // Restart the activity so the screens read the new permission state.
         rule.activityRule.scenario.recreate()
         rule.waitForIdle()
