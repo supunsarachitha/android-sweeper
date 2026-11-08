@@ -120,3 +120,17 @@ internal fun isSkippedDirectory(rootPath: Path, dir: Path): Boolean {
         rel.getName(0).toString() == "Android" &&
         rel.getName(1).toString().let { it == "data" || it == "obb" }
 }
+
+/**
+ * The malware scan's rule, wider than [isSkippedDirectory]: hidden folders ARE scanned (malware likes to hide
+ * there). Only Android/data and Android/obb (Android blocks them anyway) and the app's own trash folder are not.
+ */
+internal fun isMalwareScanOffLimits(rootPath: Path, dir: Path): Boolean {
+    val rel = rootPath.relativize(dir)
+    if (rel.nameCount == 0) return false
+    val first = rel.getName(0).toString()
+    if (rel.nameCount == 1 && first == TRASH_DIR_NAME) return true
+    return rel.nameCount == 2 &&
+        first == "Android" &&
+        rel.getName(1).toString().let { it == "data" || it == "obb" }
+}
