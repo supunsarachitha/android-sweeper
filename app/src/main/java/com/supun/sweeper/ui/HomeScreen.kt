@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -43,6 +42,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.supun.sweeper.storage.DuplicateStats
 import com.supun.sweeper.storage.FileCleaner
+import com.supun.sweeper.storage.JunkStats
 import com.supun.sweeper.storage.StorageBreakdown
 import com.supun.sweeper.storage.StorageRepository
 import com.supun.sweeper.storage.TrashSummary
@@ -51,12 +51,6 @@ import com.supun.sweeper.storage.VolumeInfo
 import com.supun.sweeper.util.formatBytes
 import com.supun.sweeper.util.usedFraction
 import kotlinx.coroutines.CancellationException
-
-private data class Feature(val title: String, val description: String)
-
-private val upcoming = listOf(
-    Feature("Junk cleanup", "Empty folders, temp files and thumbnail caches."),
-)
 
 private data class Segment(val label: String, val bytes: Long, val fraction: Float, val color: Color)
 
@@ -74,6 +68,7 @@ fun HomeScreen(
     onOpenFiles: () -> Unit,
     onOpenTrash: () -> Unit,
     onOpenDuplicates: () -> Unit,
+    onOpenJunk: () -> Unit,
 ) {
     val context = LocalContext.current
     val repo = remember { StorageRepository(context) }
@@ -104,7 +99,7 @@ fun HomeScreen(
         topBar = { TopAppBar(title = { Text("Android Sweeper") }) },
     ) { padding ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
+            modifier = Modifier.fillMaxSize().padding(padding).testTag("home_list"),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -120,7 +115,7 @@ fun HomeScreen(
             item { FilesCard(onOpenFiles) }
             item { DuplicatesCard(DuplicateStats.wastedBytes, onOpenDuplicates) }
             item { TrashCard(trashSummary, onOpenTrash) }
-            items(upcoming) { FeatureCard(it) }
+            item { JunkCard(JunkStats.junkBytes, onOpenJunk) }
             item {
                 TextButton(onClick = { openStorageSettings(context) }) {
                     Text("Open Android storage settings")
@@ -276,17 +271,18 @@ private fun TrashCard(summary: TrashSummary, onClick: () -> Unit) {
 }
 
 @Composable
-private fun FeatureCard(feature: Feature) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+private fun JunkCard(junkBytes: Long?, onClick: () -> Unit) {
+    Card(onClick = onClick, modifier = Modifier.fillMaxWidth().testTag("junk_card")) {
         Column(Modifier.padding(16.dp)) {
-            Text(feature.title, style = MaterialTheme.typography.titleMedium)
-            Text(feature.description, style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "Coming soon",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
-            )
+            Text("Junk cleanup", style = MaterialTheme.typography.titleMedium)
+            Text("Empty folders, temp files and thumbnail caches.", style = MaterialTheme.typography.bodyMedium)
+            if (junkBytes != null) {
+                Text(
+                    "${formatBytes(junkBytes)} of junk",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
     }
 }

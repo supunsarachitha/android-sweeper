@@ -96,5 +96,43 @@ SHOT_WAIT=15 shot no duplicates-light.png --es open duplicates
 SHOT_WAIT=15 shot no duplicates-selected-light.png --es open duplicates --es demo keepoldest
 SHOT_WAIT=15 shot yes duplicates-dark.png --es open duplicates
 
+# --- Phase 5: junk cleanup ------------------------------------------------------------------
+# An empty folder chain, temp files and a thumbnail, made through the shell. Only files and
+# directories are created here, so plain rm -f and rmdir clean them up again.
+JUNK_EMPTY=/sdcard/Download/sweeper-junk-empty
+JUNK_TMP=/sdcard/Download/sweeper-junk.tmp
+JUNK_PART=/sdcard/Documents/sweeper-junk-2.part
+JUNK_DL=/sdcard/Pictures/sweeper-junk-3.crdownload
+JUNK_OFFICE='/sdcard/Download/~$sweeper-junk.docx'
+JUNK_THUMB=/sdcard/DCIM/.thumbnails/sweeper-thumb.jpg
+cleanup_files() {
+  adb shell "rm -f $BIG $OLD $APKCOPY $TRASH/$TRASHED $TRASH/index.tsv $TRASH/.nomedia; rmdir $TRASH" || true
+  adb shell "rm -f $DUP_BIG_A $DUP_BIG_B $DUP_SMALL_A $DUP_SMALL_B" || true
+  adb shell "rm -f $JUNK_TMP $JUNK_PART $JUNK_DL $JUNK_THUMB; rm -f '$JUNK_OFFICE'" || true
+  adb shell "rmdir $JUNK_EMPTY/a/b $JUNK_EMPTY/a $JUNK_EMPTY; rmdir /sdcard/DCIM/.thumbnails" || true
+}
+adb shell "mkdir -p $JUNK_EMPTY/a/b /sdcard/DCIM/.thumbnails /sdcard/Documents /sdcard/Pictures"
+adb shell "dd if=/dev/urandom of=$JUNK_TMP bs=1024 count=300"
+adb shell "dd if=/dev/urandom of=$JUNK_PART bs=1024 count=120"
+adb shell "dd if=/dev/urandom of=$JUNK_DL bs=1024 count=80"
+adb shell "echo lock > '$JUNK_OFFICE'"
+adb shell "dd if=/dev/urandom of=$JUNK_THUMB bs=1024 count=40"
+
+# The junk scan has to finish in the same process before Home is shown, because the "of junk"
+# line on Home is kept in memory: open Junk, wait for the scan, then go back to Home.
+SHOT_WAIT=20 shot no junk-light.png --es open junk
+adb shell input keyevent KEYCODE_BACK
+sleep 4
+# The Junk card is below the fold: scroll Home to the bottom so the "of junk" line is visible.
+SIZE=$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -1)
+W=${SIZE%x*}
+H=${SIZE#*x}
+for _ in 1 2 3; do
+  adb shell input swipe $((W / 2)) $((H * 3 / 4)) $((W / 2)) $((H / 4)) 300
+done
+sleep 2
+adb exec-out screencap -p > screenshots/home-final-light.png
+SHOT_WAIT=20 shot yes junk-dark.png --es open junk
+
 adb shell cmd uimode night no
 adb shell appops set --uid "$PKG" MANAGE_EXTERNAL_STORAGE default

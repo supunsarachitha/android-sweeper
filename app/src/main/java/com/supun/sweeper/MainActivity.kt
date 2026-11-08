@@ -16,6 +16,7 @@ import com.supun.sweeper.ui.AppsScreen
 import com.supun.sweeper.ui.DuplicatesScreen
 import com.supun.sweeper.ui.FilesScreen
 import com.supun.sweeper.ui.HomeScreen
+import com.supun.sweeper.ui.JunkScreen
 import com.supun.sweeper.ui.Screen
 import com.supun.sweeper.ui.ScreenSaver
 import com.supun.sweeper.ui.TAB_APK
@@ -41,6 +42,7 @@ class MainActivity : ComponentActivity() {
             "files" -> Screen.Files
             "trash" -> Screen.Trash
             "duplicates" -> Screen.Duplicates
+            "junk" -> Screen.Junk
             else -> Screen.Home
         }
         val startTab: Int = when (if (BuildConfig.DEBUG) intent.getStringExtra("tab") else null) {
@@ -71,6 +73,7 @@ class MainActivity : ComponentActivity() {
                         onOpenFiles = { screen = Screen.Files },
                         onOpenTrash = { screen = Screen.Trash },
                         onOpenDuplicates = { screen = Screen.Duplicates },
+                        onOpenJunk = { screen = Screen.Junk },
                     )
                     Screen.Apps -> AppsScreen(
                         resumeCount = resumeCount,
@@ -84,6 +87,10 @@ class MainActivity : ComponentActivity() {
                     Screen.Duplicates -> DuplicatesScreen(
                         resumeCount = resumeCount,
                         demoKeepOldest = demoKeepOldest,
+                        onBack = { screen = Screen.Home },
+                    )
+                    Screen.Junk -> JunkScreen(
+                        resumeCount = resumeCount,
                         onBack = { screen = Screen.Home },
                     )
                     Screen.Trash -> TrashScreen(
