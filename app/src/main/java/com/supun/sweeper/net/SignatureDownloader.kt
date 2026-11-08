@@ -21,6 +21,17 @@ const val SIGNATURE_SIG_FILE = "signatures.bin.sig"
 const val MAX_SIGNATURE_BYTES = 4 * 1024
 const val MAX_LIST_BYTES = 64 * 1024 * 1024
 
+/** The second list, with samples of every file type, used by the deep scan. Same folder, same signing key. */
+const val ALL_DATA_FILE = "signatures-all.bin"
+const val ALL_SIG_FILE = "signatures-all.bin.sig"
+const val MAX_ALL_LIST_BYTES = 256 * 1024 * 1024
+
+/** The lists the app can download: the file names and the size cap of each. */
+enum class SignatureList(val dataFile: String, val sigFile: String, val maxBytes: Int) {
+    ANDROID(SIGNATURE_DATA_FILE, SIGNATURE_SIG_FILE, MAX_LIST_BYTES),
+    ALL(ALL_DATA_FILE, ALL_SIG_FILE, MAX_ALL_LIST_BYTES),
+}
+
 private const val ALLOWED_SCHEME = "https"
 private const val ALLOWED_HOST = "raw.githubusercontent.com"
 private const val ALLOWED_PATH_PREFIX = "/supunsarachitha/android-sweeper/signatures/"
@@ -47,8 +58,25 @@ fun isAllowedSignatureUrl(url: String): Boolean {
     return FILE_NAME.matches(path.substring(ALLOWED_PATH_PREFIX.length)) // no slashes, no "..", no escapes
 }
 
-/** Reads all of [input] but throws as soon as more than [maxBytes] have arrived. */
-internal fun readCapped(input: InputStream, maxBytes: Int): ByteArray {
+/**
+ * Reads all of [input] but throws as soon as more than [maxBytes] have arrived. When the server announced the
+ * size ([expectedLength], within the cap) the result is read straight into one array of that size, so a big list
+ * is never held twice in memory.
+ */
+internal fun readCapped(input: InputStream, maxBytes: Int, expectedLength: Long = -1): ByteArray {
+    if (expectedLength in 1..maxBytes.toLong()) {
+        val exact = ByteArray(expectedLength.toInt())
+        input.use { stream ->
+            var filled = 0
+            while (filled < exact.size) {
+                val n = stream.read(exact, filled, exact.size - filled)
+                if (n < 0) break
+                filled += n
+            }
+            if (stream.read() >= 0) throw IOException("file too large")
+            return if (filled == exact.size) exact else exact.copyOf(filled)
+        }
+    }
     val out = ByteArrayOutputStream()
     val buffer = ByteArray(64 * 1024)
     input.use { stream ->
@@ -67,10 +95,14 @@ internal fun readCapped(input: InputStream, maxBytes: Int): ByteArray {
  * Redirects are not followed (any answer other than 200 fails), so a request can never be sent elsewhere.
  */
 class SignatureDownloader(private val versionName: String) : SignatureSource {
+    /** The Android list (the quick scan's). */
     @Throws(IOException::class)
-    override fun fetch(): SignedFile {
-        val sig = download(SIGNATURE_BASE_URL + SIGNATURE_SIG_FILE, MAX_SIGNATURE_BYTES)
-        val data = download(SIGNATURE_BASE_URL + SIGNATURE_DATA_FILE, MAX_LIST_BYTES)
+    override fun fetch(): SignedFile = fetch(SignatureList.ANDROID)
+
+    @Throws(IOException::class)
+    fun fetch(list: SignatureList): SignedFile {
+        val sig = download(SIGNATURE_BASE_URL + list.sigFile, MAX_SIGNATURE_BYTES)
+        val data = download(SIGNATURE_BASE_URL + list.dataFile, list.maxBytes)
         return SignedFile(data, sig)
     }
 
@@ -85,11 +117,12 @@ class SignatureDownloader(private val versionName: String) : SignatureSource {
             connection.requestMethod = "GET"
             connection.useCaches = false
             connection.setRequestProperty("User-Agent", "AndroidSweeper/$versionName")
+            connection.setRequestProperty("Accept-Encoding", "identity") // keeps Content-Length, so a big list is read into one array
             val code = connection.responseCode
             if (code != HTTP_OK) throw IOException("server answered $code")
             if (!isAllowedSignatureUrl(connection.url.toString())) throw IOException("unexpected address")
             if (connection.contentLengthLong > maxBytes) throw IOException("file too large")
-            return readCapped(connection.inputStream, maxBytes)
+            return readCapped(connection.inputStream, maxBytes, connection.contentLengthLong)
         } finally {
             connection.disconnect()
         }

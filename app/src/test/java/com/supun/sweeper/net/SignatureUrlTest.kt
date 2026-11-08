@@ -103,4 +103,48 @@ class SignatureUrlTest {
             assertTrue(e.message!!.contains("too large"))
         }
     }
+
+    @Test fun theDeepScanFileNamesAreAllowed() {
+        assertTrue(isAllowedSignatureUrl(base + "signatures-all.bin"))
+        assertTrue(isAllowedSignatureUrl(base + "signatures-all.bin.sig"))
+        assertTrue(isAllowedSignatureUrl(SIGNATURE_BASE_URL + ALL_DATA_FILE))
+        assertTrue(isAllowedSignatureUrl(SIGNATURE_BASE_URL + ALL_SIG_FILE))
+        assertRejected(base + "signatures-all.bin?x=1")
+        assertRejected(base + "sub/signatures-all.bin")
+    }
+
+    @Test fun signatureListNamesAndCaps() {
+        assertEquals("signatures.bin", SignatureList.ANDROID.dataFile)
+        assertEquals("signatures.bin.sig", SignatureList.ANDROID.sigFile)
+        assertEquals(64 * 1024 * 1024, SignatureList.ANDROID.maxBytes)
+        assertEquals("signatures-all.bin", SignatureList.ALL.dataFile)
+        assertEquals("signatures-all.bin.sig", SignatureList.ALL.sigFile)
+        assertEquals(256 * 1024 * 1024, SignatureList.ALL.maxBytes)
+        assertEquals(256 * 1024 * 1024, MAX_ALL_LIST_BYTES)
+        assertEquals(64 * 1024 * 1024, MAX_LIST_BYTES)
+        for (list in SignatureList.values()) {
+            assertTrue(isAllowedSignatureUrl(SIGNATURE_BASE_URL + list.dataFile))
+            assertTrue(isAllowedSignatureUrl(SIGNATURE_BASE_URL + list.sigFile))
+        }
+    }
+
+    @Test fun anAnnouncedLengthIsReadIntoOneArray() {
+        val data = ByteArray(1000) { it.toByte() }
+        assertTrue(data.contentEquals(readCapped(ByteArrayInputStream(data), 5000, expectedLength = 1000)))
+        // A body longer than announced is refused, one that is shorter is returned as it is (the signature check fails later).
+        try {
+            readCapped(ByteArrayInputStream(ByteArray(1001)), 5000, expectedLength = 1000)
+            throw AssertionError("expected the extra byte to be refused")
+        } catch (e: IOException) {
+            assertTrue(e.message!!.contains("too large"))
+        }
+        assertEquals(10, readCapped(ByteArrayInputStream(ByteArray(10)), 5000, expectedLength = 1000).size)
+        // An announced length above the cap falls back to the capped read, which still refuses.
+        try {
+            readCapped(ByteArrayInputStream(ByteArray(101)), 100, expectedLength = 101)
+            throw AssertionError("expected the cap to trigger")
+        } catch (e: IOException) {
+            assertTrue(e.message!!.contains("too large"))
+        }
+    }
 }
