@@ -74,7 +74,7 @@ class FileScanner(root: File, private val clock: () -> Long = System::currentTim
                     return FileVisitResult.TERMINATE
                 }
                 if (dir == rootPath) return FileVisitResult.CONTINUE
-                return if (isSkippedDir(dir)) FileVisitResult.SKIP_SUBTREE else FileVisitResult.CONTINUE
+                return if (isSkippedDirectory(rootPath, dir)) FileVisitResult.SKIP_SUBTREE else FileVisitResult.CONTINUE
             }
 
             override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
@@ -105,12 +105,18 @@ class FileScanner(root: File, private val clock: () -> Long = System::currentTim
         onProgress(seen)
         return ScanCandidates(found, seen, clock())
     }
+}
 
-    private fun isSkippedDir(dir: Path): Boolean {
-        val rel = rootPath.relativize(dir)
-        if (rel.getName(rel.nameCount - 1).toString().startsWith(".")) return true // includes .SweeperTrash
-        return rel.nameCount == 2 &&
-            rel.getName(0).toString() == "Android" &&
-            rel.getName(1).toString().let { it == "data" || it == "obb" }
-    }
+/**
+ * True if a walk of [rootPath] must not enter [dir] (a directory below it): hidden directories (names starting
+ * with "." which includes the trash folder), Android/data and Android/obb. Shared by every walker, so the
+ * scanners always agree on what is off limits.
+ */
+internal fun isSkippedDirectory(rootPath: Path, dir: Path): Boolean {
+    val rel = rootPath.relativize(dir)
+    if (rel.nameCount == 0) return false
+    if (rel.getName(rel.nameCount - 1).toString().startsWith(".")) return true // includes .SweeperTrash
+    return rel.nameCount == 2 &&
+        rel.getName(0).toString() == "Android" &&
+        rel.getName(1).toString().let { it == "data" || it == "obb" }
 }

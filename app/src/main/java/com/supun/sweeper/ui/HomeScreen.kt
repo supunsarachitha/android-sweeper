@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.supun.sweeper.storage.DuplicateStats
 import com.supun.sweeper.storage.FileCleaner
 import com.supun.sweeper.storage.StorageBreakdown
 import com.supun.sweeper.storage.StorageRepository
@@ -54,7 +55,6 @@ import kotlinx.coroutines.CancellationException
 private data class Feature(val title: String, val description: String)
 
 private val upcoming = listOf(
-    Feature("Duplicates", "Find identical copies of the same file."),
     Feature("Junk cleanup", "Empty folders, temp files and thumbnail caches."),
 )
 
@@ -68,7 +68,13 @@ private val OtherColor = Color(0xFF94A3B8)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(resumeCount: Int, onOpenApps: () -> Unit, onOpenFiles: () -> Unit, onOpenTrash: () -> Unit) {
+fun HomeScreen(
+    resumeCount: Int,
+    onOpenApps: () -> Unit,
+    onOpenFiles: () -> Unit,
+    onOpenTrash: () -> Unit,
+    onOpenDuplicates: () -> Unit,
+) {
     val context = LocalContext.current
     val repo = remember { StorageRepository(context) }
     var volume by remember { mutableStateOf(StorageRepository.statFsVolume()) }
@@ -112,6 +118,7 @@ fun HomeScreen(resumeCount: Int, onOpenApps: () -> Unit, onOpenFiles: () -> Unit
             }
             item { AppsCard(onOpenApps) }
             item { FilesCard(onOpenFiles) }
+            item { DuplicatesCard(DuplicateStats.wastedBytes, onOpenDuplicates) }
             item { TrashCard(trashSummary, onOpenTrash) }
             items(upcoming) { FeatureCard(it) }
             item {
@@ -233,6 +240,23 @@ private fun FilesCard(onClick: () -> Unit) {
         Column(Modifier.padding(16.dp)) {
             Text("Large & old files", style = MaterialTheme.typography.titleMedium)
             Text("Find big files, old downloads and leftover APKs.", style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+@Composable
+private fun DuplicatesCard(wastedBytes: Long?, onClick: () -> Unit) {
+    Card(onClick = onClick, modifier = Modifier.fillMaxWidth().testTag("duplicates_card")) {
+        Column(Modifier.padding(16.dp)) {
+            Text("Duplicates", style = MaterialTheme.typography.titleMedium)
+            Text("Find identical copies of the same file", style = MaterialTheme.typography.bodyMedium)
+            if (wastedBytes != null) {
+                Text(
+                    "${formatBytes(wastedBytes)} in duplicates",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
     }
 }

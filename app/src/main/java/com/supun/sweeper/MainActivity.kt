@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import com.supun.sweeper.storage.FileCleaner
 import com.supun.sweeper.ui.AppsScreen
+import com.supun.sweeper.ui.DuplicatesScreen
 import com.supun.sweeper.ui.FilesScreen
 import com.supun.sweeper.ui.HomeScreen
 import com.supun.sweeper.ui.Screen
@@ -39,6 +40,7 @@ class MainActivity : ComponentActivity() {
             "apps" -> Screen.Apps
             "files" -> Screen.Files
             "trash" -> Screen.Trash
+            "duplicates" -> Screen.Duplicates
             else -> Screen.Home
         }
         val startTab: Int = when (if (BuildConfig.DEBUG) intent.getStringExtra("tab") else null) {
@@ -46,6 +48,8 @@ class MainActivity : ComponentActivity() {
             "apk" -> TAB_APK
             else -> TAB_LARGE
         }
+        // Debug builds only: preselect "keep oldest" in every group once the duplicate scan finishes.
+        val demoKeepOldest = BuildConfig.DEBUG && intent.getStringExtra("demo") == "keepoldest"
         // Trash items older than 7 days are deleted at app start.
         lifecycleScope.launch(Dispatchers.IO) {
             try {
@@ -66,6 +70,7 @@ class MainActivity : ComponentActivity() {
                         onOpenApps = { screen = Screen.Apps },
                         onOpenFiles = { screen = Screen.Files },
                         onOpenTrash = { screen = Screen.Trash },
+                        onOpenDuplicates = { screen = Screen.Duplicates },
                     )
                     Screen.Apps -> AppsScreen(
                         resumeCount = resumeCount,
@@ -74,6 +79,11 @@ class MainActivity : ComponentActivity() {
                     Screen.Files -> FilesScreen(
                         resumeCount = resumeCount,
                         initialTab = startTab,
+                        onBack = { screen = Screen.Home },
+                    )
+                    Screen.Duplicates -> DuplicatesScreen(
+                        resumeCount = resumeCount,
+                        demoKeepOldest = demoKeepOldest,
                         onBack = { screen = Screen.Home },
                     )
                     Screen.Trash -> TrashScreen(
