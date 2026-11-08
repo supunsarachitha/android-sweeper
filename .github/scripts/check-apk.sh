@@ -27,9 +27,9 @@ if grep -q "application-debuggable" <<<"$badging"; then echo "::error::APK is de
 if grep -q "testOnly='-1'" <<<"$badging"; then echo "::error::APK is testOnly"; fail=1; fi
 
 certs=$("$BT/apksigner" verify --print-certs "$APK" 2>&1) || { echo "::error::APK signature does not verify: $certs"; exit 1; }
-# Newer apksigner versions label signers differently ("Signer #1", "Signer (minSdkVersion=..)"),
-# so take every "certificate SHA-256 digest" line and require exactly one distinct value.
-digests=$(sed -n 's/^Signer.* certificate SHA-256 digest: //p' <<<"$certs" | sort -u)
+# apksigner labels signers differently across versions ("Signer #1 certificate ...",
+# "V2 Signer: certificate ..."), so match the digest itself and require exactly one value.
+digests=$(grep -oE 'certificate SHA-256 digest: [0-9a-f]{64}' <<<"$certs" | awk '{print $4}' | sort -u)
 want=$(tr -d '[:space:]' < .github/signing-cert-sha256.txt)
 if [ "$(grep -c . <<<"$digests")" != 1 ]; then
   echo "::error::Expected exactly one signing certificate, found:"; echo "$certs"; exit 1
