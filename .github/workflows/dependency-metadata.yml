@@ -1,0 +1,44 @@
+name: Dependency verification metadata
+
+# Regenerates gradle/verification-metadata.xml (SHA-256 of every artifact the build
+# uses). Run after changing dependencies: push the change to a "deps/<name>" branch,
+# download the artifact, review the diff, commit it.
+on:
+  workflow_dispatch:
+  push:
+    branches: ['deps/**']
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      # No Gradle cache here: hashes are taken from fresh downloads.
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Resolve everything CI uses and record hashes
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: ./gradlew --no-daemon --write-verification-metadata sha256 testDebugUnitTest assembleRelease connectedDebugAndroidTest installDebug :app:dependencies
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: verification-metadata
+          path: gradle/verification-metadata.xml

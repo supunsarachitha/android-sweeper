@@ -1,0 +1,35 @@
+name: Vulnerability scan
+
+# Checks the libraries shipped in the APK, the build tools, the Gradle version and
+# the pinned GitHub Actions against OSV (osv.dev, includes GitHub advisories).
+# Runs weekly too, so new advisories are reported without a code change.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  osv:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+      - name: List the release runtime dependencies
+        run: ./gradlew --no-daemon -q :app:dependencies --configuration releaseRuntimeClasspath > runtime-deps.txt
+      - name: Query OSV and Gradle's advisory feed
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 -I .github/scripts/osv-check.py runtime-deps.txt
