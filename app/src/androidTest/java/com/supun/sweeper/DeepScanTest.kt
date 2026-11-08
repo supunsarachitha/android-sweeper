@@ -1,5 +1,7 @@
 package com.supun.sweeper
 
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsOff
 import android.os.ParcelFileDescriptor
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasTestTag
@@ -156,5 +158,10 @@ class DeepScanTest {
         rule.onNodeWithTag("deep_list_missing").assertIsDisplayed()
         rule.onNodeWithTag("deep_scan_button").assertIsDisplayed()
         rule.onNodeWithTag("update_deep_list_button").assertIsDisplayed()
+        // Large files are skipped by default; the switch includes them.
+        rule.onNodeWithTag("malware_list").performScrollToNode(hasTestTag("deep_include_large"))
+        rule.onNodeWithTag("deep_include_large").assertIsOff()
+        rule.onNodeWithTag("deep_include_large").performClick()
+        rule.onNodeWithTag("deep_include_large").assertIsOn()
     }
 }

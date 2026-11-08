@@ -95,7 +95,8 @@ hash up in a second list, `signatures-all.bin`, which holds known malware of eve
   Such matches get an amber card with the family name and the note that the file is
   dangerous on a computer. A match on an Android sample (an APK or DEX) gets the red card.
   Every match can be moved to the trash (confirm dialog, then Undo), nothing else is done.
-- **100 MB limit.** Files over 100 MB are not read; the result says how many were skipped.
+- **100 MB limit.** Files over 100 MB are not read unless you switch on **Include files over 100 MB**;
+  the result says how many were skipped.
 - **It is slow.** Every byte of every file is read once. On a phone with a lot of data this
   can take a long time; the screen shows the files and gigabytes checked so far and has a
   Cancel button. Needs All files access, like the other file tools.

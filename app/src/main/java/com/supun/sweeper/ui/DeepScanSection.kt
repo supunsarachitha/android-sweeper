@@ -2,6 +2,7 @@ package com.supun.sweeper.ui
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -12,8 +13,10 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -42,6 +45,8 @@ internal fun DeepScanCard(
     bytes: Long,
     busy: Boolean,
     message: String?,
+    includeLarge: Boolean,
+    onIncludeLargeChange: (Boolean) -> Unit,
     onAllow: () -> Unit,
     onScan: () -> Unit,
     onUpdate: () -> Unit,
@@ -54,7 +59,8 @@ internal fun DeepScanCard(
             Spacer(Modifier.height(4.dp))
             Text(
                 "Checks every file on your storage, not only apps, against $samples of all kinds. " +
-                    "Files over 100 MB are skipped. This can take a long time on a full phone.",
+                    "Files over 100 MB are skipped unless you include them below. " +
+                    "This can take a long time on a full phone.",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Spacer(Modifier.height(8.dp))
@@ -86,6 +92,20 @@ internal fun DeepScanCard(
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(onClick = onCancel, modifier = Modifier.testTag("deep_scan_cancel")) { Text("Cancel") }
             } else {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        "Include files over 100 MB (slower)",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = includeLarge,
+                        onCheckedChange = onIncludeLargeChange,
+                        enabled = !busy,
+                        modifier = Modifier.testTag("deep_include_large"),
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
                 Button(onClick = onScan, enabled = !busy, modifier = Modifier.testTag("deep_scan_button")) {
                     Text("Deep scan")
                 }
@@ -113,10 +133,16 @@ internal fun DeepCleanCard(result: DeepScanResult) {
     Card(modifier = Modifier.fillMaxWidth().testTag("deep_scan_clean")) {
         Column(Modifier.padding(16.dp)) {
             Text(
-                "No known malware found · ${filesText(result.filesChecked)} checked (${formatBytes(result.bytesHashed)}) · " +
-                    "${filesText(result.tooLarge)} over 100 MB skipped",
+                "No known malware found · ${filesText(result.filesChecked)} checked (${formatBytes(result.bytesHashed)})",
                 style = MaterialTheme.typography.bodyLarge,
             )
+            if (result.tooLarge > 0) {
+                Text(
+                    "${filesText(result.tooLarge)} over 100 MB skipped (switch on \"Include files over 100 MB\" to check them).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             if (result.skipped > 0) {
                 Text(
                     "${filesText(result.skipped)} could not be read and were skipped.",
