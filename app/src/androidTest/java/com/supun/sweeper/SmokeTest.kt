@@ -63,7 +63,7 @@ class SmokeTest {
 
         rule.onNodeWithTag("apps_card").performClick()
         rule.waitUntil(30_000) {
-            rule.onAllNodesWithTag("app_row_com.supun.sweeper").fetchSemanticsNodes().isNotEmpty()
+            rule.onAllNodesWithTag("apps_list").fetchSemanticsNodes().isNotEmpty()
         }
         rule.onNodeWithTag("apps_list").performScrollToNode(hasTestTag("app_row_com.supun.sweeper"))
         rule.onNodeWithTag("app_row_com.supun.sweeper").assertIsDisplayed()

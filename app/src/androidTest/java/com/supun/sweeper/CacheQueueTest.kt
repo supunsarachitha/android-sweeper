@@ -43,7 +43,8 @@ class CacheQueueTest {
         rule.waitForIdle()
         rule.onNodeWithTag("home_list").performScrollToNode(hasTestTag("apps_card"))
         rule.onNodeWithTag("apps_card").performClick()
-        rule.waitUntil(30_000) { hasNode("app_check_$pkg") }
+        // The list only composes the rows on screen, so wait for the list and scroll to the row.
+        rule.waitUntil(30_000) { hasNode("apps_list") }
         rule.onNodeWithTag("apps_list").performScrollToNode(hasTestTag("app_check_$pkg"))
         rule.onNodeWithTag("app_check_$pkg").performClick()
         rule.onNodeWithTag("apps_list").performScrollToNode(hasTestTag("clear_selected_button"))
