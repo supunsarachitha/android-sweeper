@@ -14,10 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.BottomAppBar
-import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -30,7 +27,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -68,14 +64,15 @@ private enum class JunkCategory(val title: String, val tag: String, val expandTa
 }
 
 /** One line in a section. [size] is null for empty folders, which hold nothing. */
-private class JunkRow(val key: String, val name: String, val label: String, val size: Long?)
+private class JunkRow(val key: String, val name: String, val folder: String, val size: Long?)
 
 /** Sections with at most this many rows start open; bigger ones start closed so the screen stays short. */
 private const val AUTO_EXPAND_MAX = 8
 
 private fun itemCount(n: Int): String = if (n == 1) "1 item" else "$n items"
 
-@OptIn(ExperimentalMaterial3Api::class)
+private fun folderCount(n: Int): String = if (n == 1) "1 folder" else "$n folders"
+
 @Composable
 fun JunkScreen(resumeCount: Int, onBack: () -> Unit) {
     val context = LocalContext.current
@@ -186,31 +183,18 @@ fun JunkScreen(resumeCount: Int, onBack: () -> Unit) {
     }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Junk cleanup") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Back")
-                    }
-                },
-            )
-        },
+        topBar = { SweeperTopBar("Junk cleanup", onBack = onBack) },
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             if (granted && loaded != null) {
-                BottomAppBar(contentPadding = PaddingValues(horizontal = 16.dp)) {
-                    Text(
-                        "$selectedCount selected · ${formatBytes(selectedBytes)}",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.weight(1f).testTag("selection_summary"),
-                    )
-                    Button(
-                        onClick = { confirm = true },
-                        enabled = selectedCount > 0 && !busy,
-                        modifier = Modifier.testTag("clean_button"),
-                    ) { Text("Clean selected") }
-                }
+                BottomActionBar(
+                    summary = "$selectedCount selected · ${formatBytes(selectedBytes)}",
+                    buttonText = "Clean selected",
+                    enabled = selectedCount > 0 && !busy,
+                    onClick = { confirm = true },
+                    summaryModifier = Modifier.testTag("selection_summary"),
+                    buttonModifier = Modifier.testTag("clean_button"),
+                )
             }
         },
     ) { padding ->
@@ -250,6 +234,12 @@ fun JunkScreen(resumeCount: Int, onBack: () -> Unit) {
                         modifier = Modifier.testTag("cancel_scan_button"),
                     ) { Text("Cancel") }
                 }
+                JunkCategory.entries.all { rowsOf(loaded, it, rootPath, cachePaths).isEmpty() } -> EmptyState(
+                    icon = R.drawable.ic_sparkle,
+                    title = "No junk found",
+                    body = "Your storage is already tidy.",
+                    modifier = Modifier.testTag("junk_empty"),
+                )
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxSize().testTag("junk_list"),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
@@ -258,7 +248,7 @@ fun JunkScreen(resumeCount: Int, onBack: () -> Unit) {
                         val rows = rowsOf(loaded, category, rootPath, cachePaths)
                         val isOpen = category in expanded
                         item(key = "header_${category.name}") {
-                            SectionHeader(
+                            JunkSectionHeader(
                                 category = category,
                                 count = rows.size,
                                 bytes = rows.sumOf { it.size ?: 0L },
@@ -293,19 +283,26 @@ fun JunkScreen(resumeCount: Int, onBack: () -> Unit) {
                                         .padding(start = 52.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Text(
-                                        row.label,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    Spacer(Modifier.width(12.dp))
-                                    Text(
-                                        row.size?.let { formatBytes(it) } ?: "—",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            row.name,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        Text(
+                                            row.folder,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.MiddleEllipsis,
+                                        )
+                                    }
+                                    // Empty folders hold nothing, so they have no size to show.
+                                    if (row.size != null) {
+                                        Spacer(Modifier.width(12.dp))
+                                        Text(nbBytes(row.size), style = MaterialTheme.typography.titleSmall)
+                                    }
                                 }
                             }
                         }
@@ -346,24 +343,22 @@ fun JunkScreen(resumeCount: Int, onBack: () -> Unit) {
 private fun rowsOf(scan: JunkScan, category: JunkCategory, rootPath: String, cachePaths: List<Pair<String, String>>): List<JunkRow> =
     when (category) {
         JunkCategory.EMPTY -> scan.junk.emptyFolders.map {
-            JunkRow(it, File(it).name, relativePath(rootPath, it), null)
+            JunkRow(it, File(it).name, relativeFolder(rootPath, it), null)
         }
         JunkCategory.THUMBS -> scan.junk.thumbnails.map {
-            JunkRow(it.path, it.name, relativePath(rootPath, it.path), it.size)
+            JunkRow(it.path, it.name, relativeFolder(rootPath, it.path), it.size)
         }
         JunkCategory.TEMP -> scan.junk.tempFiles.map {
-            JunkRow(it.path, it.name, relativePath(rootPath, it.path), it.size)
+            JunkRow(it.path, it.name, relativeFolder(rootPath, it.path), it.size)
         }
         JunkCategory.CACHE -> scan.appCache.map { entry ->
             val where = cachePaths.firstOrNull { entry.path.startsWith(it.first + "/") }?.second ?: "Cache"
-            JunkRow(entry.path, File(entry.path).name, "$where/${File(entry.path).name}", entry.size)
+            JunkRow(entry.path, File(entry.path).name, where, entry.size)
         }
     }
 
-private fun relativePath(rootPath: String, path: String): String = path.removePrefix(rootPath).trimStart('/')
-
 @Composable
-private fun SectionHeader(
+private fun JunkSectionHeader(
     category: JunkCategory,
     count: Int,
     bytes: Long,
@@ -395,14 +390,17 @@ private fun SectionHeader(
             Column(Modifier.weight(1f)) {
                 Text(category.title, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    if (showSize) "${itemCount(count)} · ${formatBytes(bytes)}" else "${itemCount(count)} · size —",
+                    if (showSize) "${itemCount(count)} · ${nbBytes(bytes)}" else folderCount(count),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
-        TextButton(onClick = onExpand, modifier = Modifier.testTag(category.expandTag)) {
-            Text(if (open) "Hide" else "Show")
+        IconButton(onClick = onExpand, modifier = Modifier.testTag(category.expandTag)) {
+            Icon(
+                painterResource(if (open) R.drawable.ic_expand_less else R.drawable.ic_expand_more),
+                contentDescription = (if (open) "Hide " else "Show ") + category.title,
+            )
         }
     }
 }

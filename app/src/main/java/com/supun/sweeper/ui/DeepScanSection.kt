@@ -21,7 +21,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.supun.sweeper.R
 import com.supun.sweeper.malware.DeepMatch
 import com.supun.sweeper.malware.DeepScanResult
 import com.supun.sweeper.malware.SignatureStore
@@ -53,7 +55,7 @@ internal fun DeepScanCard(
     onCancel: () -> Unit,
 ) {
     val samples = if (header != null) "${formatCount(header.count.toInt())} known malware samples" else "a large list of known malware samples"
-    Card(modifier = Modifier.fillMaxWidth().testTag("deep_scan_card")) {
+    Card(modifier = Modifier.fillMaxWidth().testTag("deep_scan_card"), colors = sweeperCardColors()) {
         Column(Modifier.padding(16.dp)) {
             Text("Deep scan (all files)", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(4.dp))
@@ -130,12 +132,13 @@ internal fun DeepScanCard(
 
 @Composable
 internal fun DeepCleanCard(result: DeepScanResult) {
-    Card(modifier = Modifier.fillMaxWidth().testTag("deep_scan_clean")) {
-        Column(Modifier.padding(16.dp)) {
-            Text(
-                "No known malware found · ${filesText(result.filesChecked)} checked (${formatBytes(result.bytesHashed)})",
-                style = MaterialTheme.typography.bodyLarge,
-            )
+    Card(modifier = Modifier.fillMaxWidth().testTag("deep_scan_clean"), colors = sweeperCardColors()) {
+        EmptyState(
+            icon = R.drawable.ic_shield,
+            title = "No known malware found",
+            body = "${filesText(result.filesChecked)} checked (${nbBytes(result.bytesHashed)})",
+        )
+        Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
             if (result.tooLarge > 0) {
                 Text(
                     "${filesText(result.tooLarge)} over 100 MB skipped (switch on \"Include files over 100 MB\" to check them).",
@@ -173,7 +176,13 @@ internal fun DeepMatchCard(match: DeepMatch, busy: Boolean, onTrash: () -> Unit)
         Column(Modifier.padding(16.dp)) {
             Text(match.family, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(4.dp))
-            Text(match.path, style = MaterialTheme.typography.bodyMedium)
+            Text(match.fileName, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                match.path.substringBeforeLast('/', ""),
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.MiddleEllipsis,
+            )
             if (!match.isAndroid) {
                 Spacer(Modifier.height(4.dp))
                 Text(DEEP_NON_ANDROID_NOTE, style = MaterialTheme.typography.bodySmall)
