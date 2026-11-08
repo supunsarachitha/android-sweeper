@@ -11,4 +11,4 @@ Last updated: 2026-11-08 03:55 UTC
 | 4 Duplicates | - | - | todo | - |
 | 5 Junk cleanup | - | - | todo | - |
 
-Resume cron job: (set below)
+Resume cron job: `f5f9f73a758f` (android-sweeper-resume, every 2h, Sonnet). Remove it when all phases are done.
