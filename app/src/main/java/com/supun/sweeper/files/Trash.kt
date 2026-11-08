@@ -80,43 +80,54 @@ class Trash(storageRoot: File, private val clock: () -> Long = System::currentTi
     /** Items, newest first. Drops index entries whose file is missing and prunes old orphan files. */
     fun list(): List<TrashItem> = synchronized(LOCK) { load().sortedByDescending { it.trashedAt } }
 
-    /** Moves each file into the trash. Files failing the safety checks are skipped; failed moves are left alone. */
+    /**
+     * Moves each file into the trash. Files failing the safety checks are skipped; failed moves are left alone.
+     *
+     * Write-ahead: every planned item is recorded in the index BEFORE anything moves. If the app dies mid-batch,
+     * the entries whose move never happened point at missing stored files and are dropped on the next load,
+     * while those files are still in their original place. A moved file can therefore never be unrecorded.
+     */
     fun trash(files: List<File>): TrashResult = synchronized(LOCK) {
         val items = load()
-        val moved = ArrayList<TrashItem>()
         var skipped = 0
-        var failed = 0
-        val originals = HashMap<String, Path>()
+        val planned = ArrayList<Pair<TrashItem, Path>>()
+        val seen = HashSet<String>()
         for (file in files) {
             val canonical = guard.validate(file)
-            if (canonical == null) {
+            if (canonical == null || !seen.add(canonical.path)) {
                 skipped++
                 continue
             }
+            val size = try {
+                Files.size(canonical.toPath())
+            } catch (e: Exception) {
+                skipped++
+                continue
+            }
+            planned.add(TrashItem(UUID.randomUUID().toString(), clock(), size, canonical.path) to canonical.toPath())
+        }
+        if (planned.isEmpty()) return@synchronized TrashResult(emptyList(), skipped, 0)
+        try {
+            writeIndex(items + planned.map { it.first })
+        } catch (e: Exception) {
+            return@synchronized TrashResult(emptyList(), skipped, planned.size) // nothing moved
+        }
+        val moved = ArrayList<TrashItem>()
+        var failed = 0
+        for ((item, source) in planned) {
             try {
-                ensureDir()
-                val size = Files.size(canonical.toPath())
-                val id = UUID.randomUUID().toString()
-                Files.move(canonical.toPath(), storedFile(id).toPath()) // no REPLACE_EXISTING
-                originals[id] = canonical.toPath()
-                moved.add(TrashItem(id, clock(), size, canonical.path))
+                Files.move(source, storedFile(item.id).toPath()) // no REPLACE_EXISTING
+                moved.add(item)
             } catch (e: Exception) {
                 failed++
             }
         }
-        if (moved.isEmpty()) return@synchronized TrashResult(emptyList(), skipped, failed)
-        try {
-            writeIndex(items + moved)
-        } catch (e: Exception) {
-            // Without an index entry the files would be lost track of: put them back.
-            for (item in moved) {
-                try {
-                    Files.move(storedFile(item.id).toPath(), originals.getValue(item.id))
-                } catch (e2: Exception) {
-                    // Cannot happen in practice (same folder it came from); it would stay as an orphan.
-                }
+        if (failed > 0) {
+            try {
+                writeIndex(items + moved)
+            } catch (e: Exception) {
+                // Entries of files that did not move are dropped on the next load (no stored file).
             }
-            return@synchronized TrashResult(emptyList(), skipped, failed + moved.size)
         }
         TrashResult(moved, skipped, failed)
     }
@@ -221,31 +232,42 @@ class Trash(storageRoot: File, private val clock: () -> Long = System::currentTi
         if (!Files.exists(nomedia.toPath(), LinkOption.NOFOLLOW_LINKS)) Files.createFile(nomedia.toPath())
     }
 
-    /** Reads the index; drops entries without a stored file; deletes unindexed files older than 7 days. */
+    /**
+     * Reads the index and drops entries without a stored file. Files in the trash folder that have no entry
+     * (which write-ahead indexing should make impossible) are never deleted: they are adopted as items with a
+     * fresh 7 days, restorable to Download/Recovered from trash/.
+     */
     private fun load(): MutableList<TrashItem> {
         if (!dir.isDirectory) return ArrayList()
         val parsed = readIndexFile()
         val kept = parsed.filter { Files.isRegularFile(storedFile(it.id).toPath(), LinkOption.NOFOLLOW_LINKS) }
-        val ids = kept.map { it.id }.toSet()
-        val now = clock()
+        val ids = kept.map { it.id }.toHashSet()
+        val adopted = ArrayList<TrashItem>()
         dir.listFiles()?.forEach { f ->
             if (f.name in RESERVED || f.name in ids) return@forEach
             try {
-                if (Files.isRegularFile(f.toPath(), LinkOption.NOFOLLOW_LINKS) && now - f.lastModified() > TRASH_MAX_AGE_MS) {
-                    Files.deleteIfExists(f.toPath())
+                if (!Files.isRegularFile(f.toPath(), LinkOption.NOFOLLOW_LINKS)) return@forEach
+                var id = f.name
+                if (!ID_REGEX.matches(id)) {
+                    id = UUID.randomUUID().toString()
+                    Files.move(f.toPath(), storedFile(id).toPath())
                 }
+                val recovered = File(guard.root, "Download/$RECOVERED_DIR/${f.name}").path
+                adopted.add(TrashItem(id, clock(), Files.size(storedFile(id).toPath()), recovered))
+                ids.add(id)
             } catch (e: Exception) {
-                // Leave it; it is retried on the next load.
+                // Left as is; retried on the next load.
             }
         }
-        if (kept.size != parsed.size) {
+        val all = kept + adopted
+        if (kept.size != parsed.size || adopted.isNotEmpty()) {
             try {
-                writeIndex(kept)
+                writeIndex(all)
             } catch (e: Exception) {
-                // Dropped again on the next load.
+                // Retried on the next load.
             }
         }
-        return kept.toMutableList()
+        return all.toMutableList()
     }
 
     private fun readIndexFile(): List<TrashItem> {
@@ -301,6 +323,7 @@ class Trash(storageRoot: File, private val clock: () -> Long = System::currentTi
         private val LOCK = Any()
         private const val INDEX_NAME = "index.tsv"
         private const val INDEX_TMP_NAME = "index.tsv.tmp"
+        const val RECOVERED_DIR = "Recovered from trash"
         private val RESERVED = setOf(".nomedia", INDEX_NAME, INDEX_TMP_NAME)
         private val ID_REGEX = Regex("[A-Za-z0-9-]{1,64}")
 

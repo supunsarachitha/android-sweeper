@@ -132,17 +132,46 @@ class TrashTest {
         assertTrue(text.contains(b.id))
     }
 
-    @Test fun unindexedFilesAreDeletedOnlyWhenOlderThanSevenDays() {
+    @Test fun unindexedFilesAreAdoptedNeverDeleted() {
         trash.trash(listOf(file("a.txt")))
         val dir = File(root, TRASH_DIR_NAME)
         val fresh = File(dir, "fresh-orphan").also { it.writeText("x") }
-        val stale = File(dir, "stale-orphan").also { it.writeText("x") }
+        val stale = File(dir, "stale orphan.pdf").also { it.writeText("old but precious") }
         assertTrue(fresh.setLastModified(now - DAY_MS))
-        assertTrue(stale.setLastModified(now - 8 * DAY_MS))
-        trash.list()
+        assertTrue(stale.setLastModified(now - 400 * DAY_MS)) // a move keeps the old mtime
+        val items = trash.list()
+        assertEquals(3, items.size)
         assertTrue(fresh.exists())
-        assertFalse(stale.exists())
+        val adoptedStale = items.single { it.name == "stale orphan.pdf" }
+        assertEquals(now, adoptedStale.trashedAt) // a fresh 7 days, whatever the file's mtime
+        assertEquals(0, trash.purgeExpired())
+        val restored = trash.restore(adoptedStale.id)!!
+        assertEquals(File(root, "Download/${Trash.RECOVERED_DIR}/stale orphan.pdf"), restored)
+        assertEquals("old but precious", restored.readText())
         assertTrue(File(dir, ".nomedia").exists())
+    }
+
+    @Test fun crashAfterIndexWriteBeforeMoveLosesNothing() {
+        // State after write-ahead indexing when the process died before the move.
+        val original = file("Download/old-report.pdf", "keep me")
+        assertTrue(original.setLastModified(now - 400 * DAY_MS))
+        trash.trash(listOf(file("other.txt"))) // creates the trash folder and index
+        File(root, "$TRASH_DIR_NAME/index.tsv")
+            .appendText("0b5c2d4e-0000-4000-8000-000000000001\t$now\t7\t${original.canonicalPath}\n")
+        val items = trash.list()
+        assertEquals(1, items.size) // the never-moved entry is dropped
+        assertTrue(original.isFile)
+        assertEquals("keep me", original.readText())
+    }
+
+    @Test fun crashAfterMoveBeforeIndexKeepsTheFile() {
+        // A stored file with no index entry and an old mtime: must be adopted, not purged.
+        trash.trash(listOf(file("other.txt")))
+        val stored = File(root, "$TRASH_DIR_NAME/0b5c2d4e-0000-4000-8000-000000000002").also { it.writeText("data") }
+        assertTrue(stored.setLastModified(now - 400 * DAY_MS))
+        assertEquals(0, trash.purgeExpired())
+        assertTrue(stored.isFile)
+        assertEquals(2, trash.list().size)
     }
 
     @Test fun rejectsPathsOutsideTheRoot() {
