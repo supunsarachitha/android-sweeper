@@ -6,8 +6,10 @@ usage: build_signatures.py <out signatures.bin> <out info.json>
            [--previous FILE]          the currently published signatures.bin, ALREADY signature-checked;
                                       its entries are kept (the list only grows)
            [--previous-info URL]      info.json of the published list, for the shrink check
+           [--types android|all]      android (default): APK/DEX only, family names as given;
+                                      all: every file type, names like "AgentTesla (exe)"
 
-Keeps rows whose file type is apk or dex (or whose MIME type is the APK type). Refuses to publish when the
+With --types android, keeps rows whose file type is apk or dex (or whose MIME type is the APK type). Refuses to publish when the
 result is empty or less than half the size of the previous published list.
 """
 import csv
@@ -43,22 +45,35 @@ def rows(path):
             yield [c.strip() for c in row]
 
 
+MODE = {"types": "android"}
+SAFE_TYPE = __import__("re").compile(r"[a-z0-9]{1,12}")
+
+
+def is_unknown(name):
+    return name is None or name == UNKNOWN_NAME or name.startswith("Unknown malware")
+
+
 def add(entries, sha, ftype, mime, family):
-    """Adds one sample if it is an Android file with a valid SHA-256. Returns True if it was added."""
+    """Adds one sample if it fits the mode and has a valid SHA-256. Returns True if it was added."""
     sha = (sha or "").strip().lower()
     ftype = (ftype or "").strip().lower()
     mime = (mime or "").strip().lower()
     family = (family or "").strip()
-    if ftype not in ANDROID_TYPES and mime != APK_MIME:
+    is_android = ftype in ANDROID_TYPES or mime == APK_MIME
+    if MODE["types"] == "android" and not is_android:
         return False
     if len(sha) != 64 or any(c not in "0123456789abcdef" for c in sha):
         return False
-    if not family or family.lower() in ("n/a", "null", "none"):
-        family = UNKNOWN_NAME
+    known = bool(family) and family.lower() not in ("n/a", "null", "none")
+    if MODE["types"] == "android":
+        name = family if known else UNKNOWN_NAME
+    else:
+        kind = ftype if SAFE_TYPE.fullmatch(ftype or "") else "file"
+        name = f"{family} ({kind})" if known else f"Unknown malware ({kind})"
     key = bytes.fromhex(sha)
     # A named family beats "unknown" when the same sample shows up again.
-    if entries.get(key) in (None, UNKNOWN_NAME):
-        entries[key] = family
+    if is_unknown(entries.get(key)):
+        entries[key] = name
     return True
 
 
@@ -105,7 +120,9 @@ def main(argv):
     ap.add_argument("--api-json", action="append", default=[])
     ap.add_argument("--previous")
     ap.add_argument("--previous-info")
+    ap.add_argument("--types", choices=["android", "all"], default="android")
     args = ap.parse_args(argv[1:])
+    MODE["types"] = args.types
 
     entries = {}
     if args.previous:
@@ -128,9 +145,9 @@ def main(argv):
         except Exception as e:  # first run: nothing published yet
             print(f"no previous info ({e.__class__.__name__}); skipping the shrink check")
     count = len(entries)
-    print(f"android hashes: {count} (previous published {prev_count})")
+    print(f"{args.types} hashes: {count} (previous published {prev_count})")
     if count == 0:
-        print("::error::no Android entries found; refusing to publish")
+        print("::error::no entries found; refusing to publish")
         return 1
     if prev_count and count < prev_count // 2:
         print(f"::error::only {count} entries vs {prev_count} last time; refusing to publish a shrunken list")
