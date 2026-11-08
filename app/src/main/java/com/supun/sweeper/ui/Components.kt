@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -123,7 +125,25 @@ fun ToolCard(
             TonalIcon(icon)
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f, fill = false))
+                    if (badge != null) {
+                        Spacer(Modifier.width(8.dp))
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.primaryContainer)
+                                .padding(horizontal = 8.dp, vertical = 2.dp),
+                        ) {
+                            Text(
+                                badge,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
                 Text(
                     subtitle,
                     style = MaterialTheme.typography.bodyMedium,
@@ -138,22 +158,6 @@ fun ToolCard(
                         color = MaterialTheme.colorScheme.primary,
                         maxLines = 4,
                         overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            if (badge != null) {
-                Spacer(Modifier.width(8.dp))
-                Box(
-                    Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer)
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                ) {
-                    Text(
-                        badge,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        maxLines = 1,
                     )
                 }
             }
@@ -226,6 +230,18 @@ fun EmptyState(icon: Int, title: String, modifier: Modifier = Modifier, body: St
                 textAlign = TextAlign.Center,
             )
         }
+    }
+}
+
+/** Filter chips in a row that wraps onto a second line on a narrow screen, so none is cut off. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun ChipFlow(content: @Composable () -> Unit) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        content()
     }
 }
 

@@ -188,7 +188,7 @@ fun JunkScreen(resumeCount: Int, onBack: () -> Unit) {
         bottomBar = {
             if (granted && loaded != null) {
                 BottomActionBar(
-                    summary = "$selectedCount selected · ${formatBytes(selectedBytes)}",
+                    summary = "$selectedCount selected · ${nbBytes(selectedBytes)}",
                     buttonText = "Clean selected",
                     enabled = selectedCount > 0 && !busy,
                     onClick = { confirm = true },
@@ -270,7 +270,7 @@ fun JunkScreen(resumeCount: Int, onBack: () -> Unit) {
                                         "Nothing found",
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(start = 52.dp, bottom = 8.dp),
+                                        modifier = Modifier.padding(start = 36.dp, bottom = 8.dp),
                                     )
                                 }
                             }
@@ -280,7 +280,7 @@ fun JunkScreen(resumeCount: Int, onBack: () -> Unit) {
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .testTag("junk_row_${row.name}")
-                                        .padding(start = 52.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+                                        .padding(start = 36.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Column(Modifier.weight(1f)) {

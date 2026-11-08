@@ -11,7 +11,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,7 +25,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -348,13 +346,17 @@ private fun SelectionBar(count: Int, cache: Long, onClearCaches: () -> Unit, onS
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "${if (count == 1) "1 app" else "$count apps"} · cache ${formatBytes(cache)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f),
-                )
+            Text(
+                "${if (count == 1) "1 app" else "$count apps"} · cache ${nbBytes(cache)}",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 TextButton(onClick = onSelectNone) { Text("None") }
+                Spacer(Modifier.width(8.dp))
                 Button(onClick = onClearCaches, modifier = Modifier.testTag("clear_selected_button")) {
                     Text("Clear caches")
                 }
@@ -469,14 +471,7 @@ private fun AppsHeader(count: Int, cacheTotal: Long) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SortChips(selected: AppSort, onSelect: (AppSort) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    ChipFlow {
         sortLabels.forEach { (sort, label) ->
             val isSelected = selected == sort
             FilterChip(

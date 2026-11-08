@@ -169,7 +169,7 @@ fun DuplicatesScreen(resumeCount: Int, demoKeepOldest: Boolean, onBack: () -> Un
         bottomBar = {
             if (granted && loaded != null) {
                 BottomActionBar(
-                    summary = "${selection.size} selected · ${formatBytes(selectedBytes)}",
+                    summary = "${selection.size} selected · ${nbBytes(selectedBytes)}",
                     buttonText = "Move to trash",
                     enabled = selection.size > 0 && !busy,
                     onClick = { confirm = true },

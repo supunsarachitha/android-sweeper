@@ -37,8 +37,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.supun.sweeper.R
 import com.supun.sweeper.malware.formatCount
 import com.supun.sweeper.malware.formatSignatureDate
@@ -162,18 +166,13 @@ private fun StorageCard(volume: VolumeInfo) {
         Column(Modifier.padding(20.dp)) {
             Text("Internal storage", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(
-                    nbBytes(volume.used),
-                    style = MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    " used of ${nbBytes(volume.total)}",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(start = 6.dp, bottom = 6.dp),
-                )
-            }
+            Text(
+                buildAnnotatedString {
+                    withStyle(SpanStyle(fontSize = 34.sp, fontWeight = FontWeight.SemiBold)) { append(nbBytes(volume.used)) }
+                    append(" used of ${nbBytes(volume.total)}")
+                },
+                style = MaterialTheme.typography.titleMedium,
+            )
             Spacer(Modifier.height(16.dp))
             // A plain rounded bar: the Material progress bar adds a dot at its end.
             Box(
