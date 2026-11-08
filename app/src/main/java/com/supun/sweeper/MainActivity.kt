@@ -56,6 +56,8 @@ class MainActivity : ComponentActivity() {
         }
         // Debug builds only: preselect "keep oldest" in every group once the duplicate scan finishes.
         val demoKeepOldest = BuildConfig.DEBUG && intent.getStringExtra("demo") == "keepoldest"
+        // Debug builds only: "--es select pkg1,pkg2" ticks those apps on the Apps screen (for screenshots).
+        val demoSelect = (if (BuildConfig.DEBUG) intent.getStringExtra("select") else null).orEmpty()
         // Debug builds only (guarded by BuildConfig.DEBUG; the release build has no demo code at all):
         // "--es demo malware" installs a demo list signed with a throw-away key made at run time and starts a
         // scan on the Malware screen. "--es demo restricted" shows the restricted-settings help expanded.
@@ -95,6 +97,7 @@ class MainActivity : ComponentActivity() {
                         Screen.Apps -> AppsScreen(
                             resumeCount = resumeCount,
                             onBack = { screen = Screen.Home },
+                            initialSelection = demoSelect,
                         )
                         Screen.Files -> FilesScreen(
                             resumeCount = resumeCount,
