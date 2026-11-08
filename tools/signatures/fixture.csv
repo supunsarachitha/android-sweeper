@@ -1,0 +1,6 @@
+# MalwareBazaar-style export, trimmed to four rows for the parser cross-check in CI.
+# first_seen_utc, sha256_hash, md5_hash, sha1_hash, reporter, file_name, file_type_guess, mime_type, signature
+"2026-11-01 10:00:00", "0a516e9da7d29337dcd1735375604ec110819d24f03b8e44ccb0f0a2558482d3", "d41d8cd98f00b204e9800998ecf8427e", "da39a3ee5e6b4b0d3255bfef95601890afd80709", "fixture", "banker.apk", "apk", "application/vnd.android.package-archive", "FixtureBanker"
+"2026-11-02 11:00:00", "87a3bf0e0f0d6586e2557f23556c33adfc7929d22134cf2e2302bb74f0327798", "d41d8cd98f00b204e9800998ecf8427e", "da39a3ee5e6b4b0d3255bfef95601890afd80709", "fixture", "classes.dex", "dex", "application/octet-stream", "FixtureSpy"
+"2026-11-03 12:00:00", "6fe83b6bc4c0dc6f03be40f82c63dd9c70aaa75f209914950421f8a41b04d5db", "d41d8cd98f00b204e9800998ecf8427e", "da39a3ee5e6b4b0d3255bfef95601890afd80709", "fixture", "mystery.bin", "zip", "application/vnd.android.package-archive", "n/a"
+"2026-11-04 13:00:00", "fea73faa58f2c77ea72145ebea1c2c4174f6ada7d1cab0f6b5206e278a78c99d", "d41d8cd98f00b204e9800998ecf8427e", "da39a3ee5e6b4b0d3255bfef95601890afd80709", "fixture", "setup.exe", "exe", "application/x-dosexec", "FixtureWinTrojan"

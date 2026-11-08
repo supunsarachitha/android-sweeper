@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- No cleartext (plain http) traffic at all, and only the system's certificate authorities are trusted
+     (no user-added ones). The app's only download is the signed malware list, over HTTPS. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

@@ -1,8 +1,9 @@
 # Android Sweeper
 
-A personal Android storage cleaner. It is sideloaded (not on Google Play), has no internet
-permission and sends nothing anywhere. Nothing is removed without a review screen and a
-confirm dialog first.
+A personal Android storage cleaner. It is sideloaded (not on Google Play) and sends nothing
+about you or your files anywhere. Its only network use is one download: the signed list of
+known Android malware (see [Malware check](#malware-check)). Nothing is removed without a
+review screen and a confirm dialog first.
 
 Requirements: Android 8.0 (API 26) or newer.
 
@@ -24,6 +25,8 @@ Requirements: Android 8.0 (API 26) or newer.
   - thumbnail caches (`DCIM/.thumbnails`, `Pictures/.thumbnails`),
   - temp files (`*.tmp`, `*.temp`, `*.part`, `*.crdownload`, `~$*`, `Thumbs.db`, `.DS_Store`),
   - this app's own cache.
+- **Malware check:** compares your installed apps and the APK/DEX files on storage with a
+  signed list of known Android malware. See below.
 - **Trash:** everything removed from the lists above (except empty folders and the app's own
   cache) lands here. See below.
 
@@ -36,9 +39,50 @@ Every scan shows progress and can be cancelled.
 | Usage access (`PACKAGE_USAGE_STATS`) | Reads the size and cache of each app and the storage breakdown. You grant it in Android's Settings. |
 | See all apps (`QUERY_ALL_PACKAGES`) | Lists every installed app, not only the ones Android shows to all apps. |
 | All files access (`MANAGE_EXTERNAL_STORAGE`) | Finds files anywhere on shared storage and moves them into the trash. On Android 8-10 the normal storage permissions (read/write) are used instead. |
+| Internet (`INTERNET`) | Only to download the signed malware signature list from one fixed GitHub address, over HTTPS. Nothing is uploaded. CI enforces this (see below). |
+| Request delete packages (`REQUEST_DELETE_PACKAGES`) | Lets the Malware check open Android's own "Uninstall this app?" dialog. You still confirm every uninstall. |
 
-There is no internet permission, and the release check in CI fails if one ever appears. The
-app explains each permission before it sends you to Settings.
+The app explains each permission before it sends you to Settings.
+
+**How the internet permission is limited.** CI runs `.github/scripts/check-network.sh` on every
+build. It fails if any source file other than `SignatureDownloader.kt` contains networking code
+(`java.net`, `javax.net`, `HttpURLConnection`, sockets, OkHttp, Ktor, `WebView`,
+`DownloadManager`), or if that one file names any web address except the signature location.
+The downloader checks the address before connecting (https, host `raw.githubusercontent.com`,
+this repository's `signatures` folder), does not follow redirects, caps the download size and
+sends only a `User-Agent` of `AndroidSweeper/<version>`. The network security config forbids
+plain http and trusts only the system certificate authorities. `check-apk.sh` lists `INTERNET`
+on the permission allowlist with this reason.
+
+## Malware check
+
+**What it does.** The Malware screen computes the SHA-256 of every installed app's APK files
+(including split APKs) and, when All files access is on, of every `.apk` and `.dex` file on
+shared storage. Each hash is looked up in a list of known Android malware samples. A match
+shows the malware family and offers **Uninstall** and **App info** for an app, or **Move to
+trash** (with the usual confirm dialog and Undo) for a file.
+
+**Its limits.** It finds exact copies of samples that are on the list. New, rebuilt or modified
+malware has a different hash and will not be found, and a clean result does not prove an app is
+safe. Treat it as an extra check: Google Play Protect remains your main protection.
+
+**Where the list comes from.** The list is built from the Android samples (APK and DEX) of the
+[MalwareBazaar](https://bazaar.abuse.ch/) export by abuse.ch (CC0). A weekly workflow in this
+repository (`.github/workflows/signatures.yml`) turns it into `signatures.bin`, signs it and
+publishes it, with `signatures.bin.sig`, on the `signatures` branch. The file format is
+described in `tools/signatures/sigformat.py`.
+
+**Updates.** The list is downloaded only when you tap **Update signatures**, or when you open
+the Malware screen and the installed list is at least 7 days old. There is no background work.
+The screen warns when the list is more than 14 days old. A phone with no list yet downloads
+nothing until you tap the button.
+
+**Signature verification.** `signatures.bin.sig` is an ECDSA P-256 / SHA-256 signature. The
+app has the matching public key built in (`.github/signatures-public.pem`) and installs a list
+only if the signature is valid, the format is exactly right (strict parser) and the list is
+newer than the installed one (no rollback to an older list, no dates more than 2 days in the
+future). Files are written atomically, and the stored list is verified and parsed again every
+time the app starts. A list that fails any check is rejected and the old one stays.
 
 ## The trash
 
@@ -92,6 +136,13 @@ with an index recording where each file came from.
    notes (it is also kept in `.github/signing-cert-sha256.txt`).
 3. Open the APK on the phone and allow installing from that source when Android asks.
    Later releases install over the old one because they share the signing certificate.
+4. **Android 13 or newer: switch greyed out?** For apps installed from a file, Android keeps
+   the Usage access and All files access switches greyed out until you allow "restricted
+   settings". The permission cards in the app also show these steps under "Switch greyed out?":
+   1. Tap the greyed-out switch once and close the message.
+   2. Open App info for Android Sweeper (the card has a button for it).
+   3. Tap the three-dot menu (top right), choose "Allow restricted settings" and confirm.
+   4. Go back and turn the switch on.
 
 ## Build
 

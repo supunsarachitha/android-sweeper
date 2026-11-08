@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -17,6 +18,8 @@ import com.supun.sweeper.ui.DuplicatesScreen
 import com.supun.sweeper.ui.FilesScreen
 import com.supun.sweeper.ui.HomeScreen
 import com.supun.sweeper.ui.JunkScreen
+import com.supun.sweeper.ui.LocalRestrictedHelpExpanded
+import com.supun.sweeper.ui.MalwareScreen
 import com.supun.sweeper.ui.Screen
 import com.supun.sweeper.ui.ScreenSaver
 import com.supun.sweeper.ui.TAB_APK
@@ -43,6 +46,7 @@ class MainActivity : ComponentActivity() {
             "trash" -> Screen.Trash
             "duplicates" -> Screen.Duplicates
             "junk" -> Screen.Junk
+            "malware" -> Screen.Malware
             else -> Screen.Home
         }
         val startTab: Int = when (if (BuildConfig.DEBUG) intent.getStringExtra("tab") else null) {
@@ -52,6 +56,12 @@ class MainActivity : ComponentActivity() {
         }
         // Debug builds only: preselect "keep oldest" in every group once the duplicate scan finishes.
         val demoKeepOldest = BuildConfig.DEBUG && intent.getStringExtra("demo") == "keepoldest"
+        // Debug builds only (guarded by BuildConfig.DEBUG; the release build has no demo code at all):
+        // "--es demo malware" installs a demo list signed with a throw-away key made at run time and starts a
+        // scan on the Malware screen. "--es demo restricted" shows the restricted-settings help expanded.
+        val demoMalware = BuildConfig.DEBUG && intent.getStringExtra("demo") == "malware"
+        val demoRestricted = BuildConfig.DEBUG && intent.getStringExtra("demo") == "restricted"
+        if (BuildConfig.DEBUG && demoMalware) DemoHook.install(applicationContext, intent.getStringExtra("demohash"))
         // Trash items older than 7 days are deleted at app start.
         lifecycleScope.launch(Dispatchers.IO) {
             try {
@@ -64,39 +74,47 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             SweeperTheme {
-                var screen by rememberSaveable(stateSaver = ScreenSaver) { mutableStateOf(startScreen) }
-                BackHandler(enabled = screen != Screen.Home) { screen = Screen.Home }
-                when (screen) {
-                    Screen.Home -> HomeScreen(
-                        resumeCount = resumeCount,
-                        onOpenApps = { screen = Screen.Apps },
-                        onOpenFiles = { screen = Screen.Files },
-                        onOpenTrash = { screen = Screen.Trash },
-                        onOpenDuplicates = { screen = Screen.Duplicates },
-                        onOpenJunk = { screen = Screen.Junk },
-                    )
-                    Screen.Apps -> AppsScreen(
-                        resumeCount = resumeCount,
-                        onBack = { screen = Screen.Home },
-                    )
-                    Screen.Files -> FilesScreen(
-                        resumeCount = resumeCount,
-                        initialTab = startTab,
-                        onBack = { screen = Screen.Home },
-                    )
-                    Screen.Duplicates -> DuplicatesScreen(
-                        resumeCount = resumeCount,
-                        demoKeepOldest = demoKeepOldest,
-                        onBack = { screen = Screen.Home },
-                    )
-                    Screen.Junk -> JunkScreen(
-                        resumeCount = resumeCount,
-                        onBack = { screen = Screen.Home },
-                    )
-                    Screen.Trash -> TrashScreen(
-                        resumeCount = resumeCount,
-                        onBack = { screen = Screen.Home },
-                    )
+                CompositionLocalProvider(LocalRestrictedHelpExpanded provides demoRestricted) {
+                    var screen by rememberSaveable(stateSaver = ScreenSaver) { mutableStateOf(startScreen) }
+                    BackHandler(enabled = screen != Screen.Home) { screen = Screen.Home }
+                    when (screen) {
+                        Screen.Home -> HomeScreen(
+                            resumeCount = resumeCount,
+                            onOpenApps = { screen = Screen.Apps },
+                            onOpenFiles = { screen = Screen.Files },
+                            onOpenTrash = { screen = Screen.Trash },
+                            onOpenDuplicates = { screen = Screen.Duplicates },
+                            onOpenJunk = { screen = Screen.Junk },
+                            onOpenMalware = { screen = Screen.Malware },
+                        )
+                        Screen.Apps -> AppsScreen(
+                            resumeCount = resumeCount,
+                            onBack = { screen = Screen.Home },
+                        )
+                        Screen.Files -> FilesScreen(
+                            resumeCount = resumeCount,
+                            initialTab = startTab,
+                            onBack = { screen = Screen.Home },
+                        )
+                        Screen.Duplicates -> DuplicatesScreen(
+                            resumeCount = resumeCount,
+                            demoKeepOldest = demoKeepOldest,
+                            onBack = { screen = Screen.Home },
+                        )
+                        Screen.Junk -> JunkScreen(
+                            resumeCount = resumeCount,
+                            onBack = { screen = Screen.Home },
+                        )
+                        Screen.Malware -> MalwareScreen(
+                            resumeCount = resumeCount,
+                            autoScan = demoMalware,
+                            onBack = { screen = Screen.Home },
+                        )
+                        Screen.Trash -> TrashScreen(
+                            resumeCount = resumeCount,
+                            onBack = { screen = Screen.Home },
+                        )
+                    }
                 }
             }
         }

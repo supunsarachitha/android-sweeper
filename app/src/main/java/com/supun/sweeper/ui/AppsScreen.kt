@@ -154,11 +154,12 @@ private fun PermissionCard(onOpenSettings: () -> Unit) {
             Spacer(Modifier.height(8.dp))
             Text(
                 "Android Sweeper needs Usage access to read how much space each app uses. " +
-                    "It only reads sizes; nothing is sent anywhere (the app has no internet access).",
+                    "It only reads sizes; nothing about your apps or files is sent anywhere.",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Spacer(Modifier.height(12.dp))
             Button(onClick = onOpenSettings) { Text("Open Usage access settings") }
+            RestrictedSettingsHelp()
         }
     }
 }

@@ -12,3 +12,4 @@ captures/
 *.keystore
 screenshots/
 out/
+app/src/test/resources/sample-signatures.bin
