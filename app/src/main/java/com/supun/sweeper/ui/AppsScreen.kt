@@ -329,7 +329,7 @@ private fun ClearAllCard(cacheTotal: Long, filesGranted: Boolean, onAllow: () ->
                 style = MaterialTheme.typography.bodySmall,
             )
             Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = onAllow, modifier = Modifier.testTag("clear_all_allow")) {
+            Button(onClick = onAllow, modifier = Modifier.testTag("clear_all_allow")) {
                 Text("Allow All files access")
             }
         }
