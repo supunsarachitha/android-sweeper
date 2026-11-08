@@ -10,11 +10,21 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.lifecycleScope
+import com.supun.sweeper.storage.FileCleaner
 import com.supun.sweeper.ui.AppsScreen
+import com.supun.sweeper.ui.FilesScreen
 import com.supun.sweeper.ui.HomeScreen
 import com.supun.sweeper.ui.Screen
 import com.supun.sweeper.ui.ScreenSaver
+import com.supun.sweeper.ui.TAB_APK
+import com.supun.sweeper.ui.TAB_LARGE
+import com.supun.sweeper.ui.TAB_OLD
+import com.supun.sweeper.ui.TrashScreen
 import com.supun.sweeper.ui.theme.SweeperTheme
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     // Bumped on every onResume so screens re-check usage access after the user returns from Settings.
@@ -24,8 +34,28 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         // Debug builds only: lets CI screenshots start directly on the Apps screen.
-        val startScreen: Screen =
-            if (BuildConfig.DEBUG && intent.getStringExtra("open") == "apps") Screen.Apps else Screen.Home
+        val debugOpen = if (BuildConfig.DEBUG) intent.getStringExtra("open") else null
+        val startScreen: Screen = when (debugOpen) {
+            "apps" -> Screen.Apps
+            "files" -> Screen.Files
+            "trash" -> Screen.Trash
+            else -> Screen.Home
+        }
+        val startTab: Int = when (if (BuildConfig.DEBUG) intent.getStringExtra("tab") else null) {
+            "old" -> TAB_OLD
+            "apk" -> TAB_APK
+            else -> TAB_LARGE
+        }
+        // Trash items older than 7 days are deleted at app start.
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                FileCleaner(applicationContext).purgeExpired()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Nothing to purge, or no file access yet.
+            }
+        }
         setContent {
             SweeperTheme {
                 var screen by rememberSaveable(stateSaver = ScreenSaver) { mutableStateOf(startScreen) }
@@ -34,8 +64,19 @@ class MainActivity : ComponentActivity() {
                     Screen.Home -> HomeScreen(
                         resumeCount = resumeCount,
                         onOpenApps = { screen = Screen.Apps },
+                        onOpenFiles = { screen = Screen.Files },
+                        onOpenTrash = { screen = Screen.Trash },
                     )
                     Screen.Apps -> AppsScreen(
+                        resumeCount = resumeCount,
+                        onBack = { screen = Screen.Home },
+                    )
+                    Screen.Files -> FilesScreen(
+                        resumeCount = resumeCount,
+                        initialTab = startTab,
+                        onBack = { screen = Screen.Home },
+                    )
+                    Screen.Trash -> TrashScreen(
                         resumeCount = resumeCount,
                         onBack = { screen = Screen.Home },
                     )
