@@ -15,13 +15,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.BottomAppBar
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -31,7 +26,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,7 +38,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -70,7 +63,6 @@ private fun stageName(stage: Int): String = when (stage) {
 
 private fun copies(n: Int): String = "$n copies"
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DuplicatesScreen(resumeCount: Int, demoKeepOldest: Boolean, onBack: () -> Unit) {
     val context = LocalContext.current
@@ -172,31 +164,18 @@ fun DuplicatesScreen(resumeCount: Int, demoKeepOldest: Boolean, onBack: () -> Un
     }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Duplicates") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Back")
-                    }
-                },
-            )
-        },
+        topBar = { SweeperTopBar("Duplicates", onBack = onBack) },
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             if (granted && loaded != null) {
-                BottomAppBar(contentPadding = PaddingValues(horizontal = 16.dp)) {
-                    Text(
-                        "${selection.size} selected · ${formatBytes(selectedBytes)}",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.weight(1f).testTag("selection_summary"),
-                    )
-                    Button(
-                        onClick = { confirm = true },
-                        enabled = selection.size > 0 && !busy,
-                        modifier = Modifier.testTag("move_to_trash_button"),
-                    ) { Text("Move to trash") }
-                }
+                BottomActionBar(
+                    summary = "${selection.size} selected · ${nbBytes(selectedBytes)}",
+                    buttonText = "Move to trash",
+                    enabled = selection.size > 0 && !busy,
+                    onClick = { confirm = true },
+                    summaryModifier = Modifier.testTag("selection_summary"),
+                    buttonModifier = Modifier.testTag("move_to_trash_button"),
+                )
             }
         },
     ) { padding ->
@@ -229,23 +208,24 @@ fun DuplicatesScreen(resumeCount: Int, demoKeepOldest: Boolean, onBack: () -> Un
                 else -> {
                     val wasted = loaded.sumOf { it.wasted }
                     val groupLabel = if (loaded.size == 1) "1 group" else "${loaded.size} groups"
-                    Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp)) {
-                        Text(
-                            "$groupLabel · ${formatBytes(wasted)} can be freed",
-                            style = MaterialTheme.typography.titleSmall,
-                            modifier = Modifier.testTag("duplicates_header"),
-                        )
-                        TextButton(
-                            onClick = { selection = selection.selectAllKeepOne(loaded) },
-                            enabled = loaded.isNotEmpty(),
-                            modifier = Modifier.testTag("keep_oldest_all_button"),
-                        ) { Text("Select duplicates (keep oldest)") }
-                    }
-                    if (loaded.isEmpty()) {
-                        Text(
-                            "No duplicates found",
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(16.dp),
+                    if (loaded.isNotEmpty()) {
+                        Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp)) {
+                            Text(
+                                "$groupLabel · ${nbBytes(wasted)} can be freed",
+                                style = MaterialTheme.typography.titleSmall,
+                                modifier = Modifier.testTag("duplicates_header"),
+                            )
+                            TextButton(
+                                onClick = { selection = selection.selectAllKeepOne(loaded) },
+                                modifier = Modifier.testTag("keep_oldest_all_button"),
+                            ) { Text("Select duplicates (keep oldest)") }
+                        }
+                    } else {
+                        EmptyState(
+                            icon = R.drawable.ic_copy,
+                            title = "No duplicates found",
+                            body = "Every file on your storage is unique.",
+                            modifier = Modifier.testTag("duplicates_empty"),
                         )
                     }
                     LazyColumn(
@@ -323,7 +303,7 @@ private fun GroupCard(
     onToggle: (String) -> Unit,
     onKeepOldest: () -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth().testTag("dup_group_$index")) {
+    Card(modifier = Modifier.fillMaxWidth().testTag("dup_group_$index"), colors = sweeperCardColors()) {
         Column(Modifier.padding(vertical = 8.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
@@ -365,10 +345,17 @@ private fun GroupCard(
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            relativeFolder(rootPath, file.path),
-                            style = MaterialTheme.typography.bodyMedium,
+                            file.name,
+                            style = MaterialTheme.typography.bodyLarge,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            relativeFolder(rootPath, file.path),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.MiddleEllipsis,
                         )
                         Text(
                             formatDate(file.lastModified) + if (i == 0) " · oldest" else "",

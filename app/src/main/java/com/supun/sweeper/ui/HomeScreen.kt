@@ -1,6 +1,7 @@
 package com.supun.sweeper.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,13 +21,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -39,7 +37,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.supun.sweeper.R
 import com.supun.sweeper.malware.formatCount
 import com.supun.sweeper.malware.formatSignatureDate
 import com.supun.sweeper.storage.DuplicateStats
@@ -51,7 +55,6 @@ import com.supun.sweeper.storage.StorageRepository
 import com.supun.sweeper.storage.TrashSummary
 import com.supun.sweeper.storage.UsageAccess
 import com.supun.sweeper.storage.VolumeInfo
-import com.supun.sweeper.util.formatBytes
 import com.supun.sweeper.util.usedFraction
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -59,13 +62,18 @@ import kotlinx.coroutines.withContext
 
 private data class Segment(val label: String, val bytes: Long, val fraction: Float, val color: Color)
 
+// Breakdown colours: the first set for a light background, the second (lighter) set for dark mode.
 private val AppsColor = Color(0xFF0F766E)
-private val ImagesColor = Color(0xFFF59E0B)
-private val VideoColor = Color(0xFF3B82F6)
-private val AudioColor = Color(0xFFEC4899)
-private val OtherColor = Color(0xFF94A3B8)
+private val ImagesColor = Color(0xFFD97706)
+private val VideoColor = Color(0xFF2563EB)
+private val AudioColor = Color(0xFFDB2777)
+private val OtherColor = Color(0xFF64748B)
+private val AppsColorDark = Color(0xFF5EEAD4)
+private val ImagesColorDark = Color(0xFFFBBF24)
+private val VideoColorDark = Color(0xFF7CB0FF)
+private val AudioColorDark = Color(0xFFF59EC4)
+private val OtherColorDark = Color(0xFFB4C0D0)
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     resumeCount: Int,
@@ -117,11 +125,11 @@ fun HomeScreen(
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Android Sweeper") }) },
+        topBar = { SweeperTopBar("Android Sweeper") },
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding).testTag("home_list"),
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item { StorageCard(volume) }
@@ -129,14 +137,16 @@ fun HomeScreen(
                 if (granted) {
                     BreakdownCard(breakdown)
                 } else {
-                    GrantRow(onGrant = { startSafely(context, UsageAccess.settingsIntent(context)) })
+                    GrantPrompt(onGrant = { startSafely(context, UsageAccess.settingsIntent(context)) })
                 }
             }
+            item { SectionHeader("Clean up") }
             item { AppsCard(onOpenApps) }
             item { FilesCard(onOpenFiles) }
             item { DuplicatesCard(DuplicateStats.wastedBytes, onOpenDuplicates) }
-            item { TrashCard(trashSummary, onOpenTrash) }
             item { JunkCard(JunkStats.junkBytes, onOpenJunk) }
+            item { TrashCard(trashSummary, onOpenTrash) }
+            item { SectionHeader("Protect") }
             item { MalwareCard(signatureLine, onOpenMalware) }
             item {
                 TextButton(onClick = { openStorageSettings(context) }) {
@@ -153,43 +163,58 @@ private fun StorageCard(volume: VolumeInfo) {
         modifier = Modifier.fillMaxWidth().testTag("storage_card"),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(20.dp)) {
             Text("Internal storage", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
             Text(
-                "${formatBytes(volume.used)} used of ${formatBytes(volume.total)}",
-                style = MaterialTheme.typography.headlineSmall,
+                buildAnnotatedString {
+                    withStyle(SpanStyle(fontSize = 34.sp, fontWeight = FontWeight.SemiBold)) { append(nbBytes(volume.used)) }
+                    append(" used of ${nbBytes(volume.total)}")
+                },
+                style = MaterialTheme.typography.titleMedium,
             )
-            Spacer(Modifier.height(12.dp))
-            LinearProgressIndicator(
-                progress = { usedFraction(volume.used, volume.total) },
-                modifier = Modifier.fillMaxWidth().height(8.dp),
-            )
-            Spacer(Modifier.height(8.dp))
-            Text("${formatBytes(volume.free)} free", style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(16.dp))
+            // A plain rounded bar: the Material progress bar adds a dot at its end.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(12.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.18f)),
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxWidth(usedFraction(volume.used, volume.total).coerceIn(0f, 1f))
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(MaterialTheme.colorScheme.primary),
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Text("${nbBytes(volume.free)} free", style = MaterialTheme.typography.bodyLarge)
         }
     }
 }
 
 @Composable
-private fun GrantRow(onGrant: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            "Grant usage access to see what uses your space",
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f),
-        )
-        Spacer(Modifier.width(8.dp))
-        Button(onClick = onGrant) { Text("Grant") }
+private fun GrantPrompt(onGrant: () -> Unit) {
+    InfoCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Grant usage access to see what uses your space",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(12.dp))
+            Button(onClick = onGrant) { Text("Grant") }
+        }
     }
 }
 
 @Composable
 private fun BreakdownCard(breakdown: StorageBreakdown?) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    val dark = isSystemInDarkTheme()
+    Card(modifier = Modifier.fillMaxWidth(), colors = sweeperCardColors()) {
         Column(Modifier.padding(16.dp)) {
             Text("What uses your space", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(12.dp))
@@ -198,11 +223,16 @@ private fun BreakdownCard(breakdown: StorageBreakdown?) {
                 return@Column
             }
             val segments = listOf(
-                Segment("Apps", breakdown.apps, breakdown.appsFraction, AppsColor),
-                Segment("Images", breakdown.images, breakdown.imagesFraction, ImagesColor),
-                Segment("Video", breakdown.video, breakdown.videoFraction, VideoColor),
-                Segment("Audio", breakdown.audio, breakdown.audioFraction, AudioColor),
-                Segment("System & other", breakdown.systemAndOther, breakdown.systemAndOtherFraction, OtherColor),
+                Segment("Apps", breakdown.apps, breakdown.appsFraction, if (dark) AppsColorDark else AppsColor),
+                Segment("Images", breakdown.images, breakdown.imagesFraction, if (dark) ImagesColorDark else ImagesColor),
+                Segment("Video", breakdown.video, breakdown.videoFraction, if (dark) VideoColorDark else VideoColor),
+                Segment("Audio", breakdown.audio, breakdown.audioFraction, if (dark) AudioColorDark else AudioColor),
+                Segment(
+                    "System & other",
+                    breakdown.systemAndOther,
+                    breakdown.systemAndOtherFraction,
+                    if (dark) OtherColorDark else OtherColor,
+                ),
             )
             val freeWeight = 1f - segments.sumOf { it.fraction.toDouble() }.toFloat()
             Row(
@@ -210,7 +240,7 @@ private fun BreakdownCard(breakdown: StorageBreakdown?) {
                     .fillMaxWidth()
                     .height(14.dp)
                     .clip(RoundedCornerShape(7.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                     .testTag("breakdown_bar"),
             ) {
                 segments.forEach { segment ->
@@ -234,7 +264,7 @@ private fun BreakdownCard(breakdown: StorageBreakdown?) {
                     Box(Modifier.size(10.dp).clip(CircleShape).background(segment.color))
                     Spacer(Modifier.width(8.dp))
                     Text(segment.label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                    Text(formatBytes(segment.bytes), style = MaterialTheme.typography.bodyMedium)
+                    Text(nbBytes(segment.bytes), style = MaterialTheme.typography.bodyMedium)
                 }
             }
         }
@@ -243,81 +273,71 @@ private fun BreakdownCard(breakdown: StorageBreakdown?) {
 
 @Composable
 private fun AppsCard(onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth().testTag("apps_card")) {
-        Column(Modifier.padding(16.dp)) {
-            Text("Apps", style = MaterialTheme.typography.titleMedium)
-            Text("See every app's size and cache", style = MaterialTheme.typography.bodyMedium)
-        }
-    }
+    ToolCard(
+        icon = R.drawable.ic_apps,
+        title = "Apps",
+        subtitle = "See every app's size and cache",
+        onClick = onClick,
+        modifier = Modifier.testTag("apps_card"),
+    )
 }
 
 @Composable
 private fun FilesCard(onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth().testTag("files_card")) {
-        Column(Modifier.padding(16.dp)) {
-            Text("Large & old files", style = MaterialTheme.typography.titleMedium)
-            Text("Find big files, old downloads and leftover APKs.", style = MaterialTheme.typography.bodyMedium)
-        }
-    }
+    ToolCard(
+        icon = R.drawable.ic_file,
+        title = "Large & old files",
+        subtitle = "Find big files, old downloads and leftover APKs.",
+        onClick = onClick,
+        modifier = Modifier.testTag("files_card"),
+    )
 }
 
 @Composable
 private fun DuplicatesCard(wastedBytes: Long?, onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth().testTag("duplicates_card")) {
-        Column(Modifier.padding(16.dp)) {
-            Text("Duplicates", style = MaterialTheme.typography.titleMedium)
-            Text("Find identical copies of the same file", style = MaterialTheme.typography.bodyMedium)
-            if (wastedBytes != null) {
-                Text(
-                    "${formatBytes(wastedBytes)} in duplicates",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun TrashCard(summary: TrashSummary, onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth().testTag("trash_card")) {
-        Column(Modifier.padding(16.dp)) {
-            Text("Trash", style = MaterialTheme.typography.titleMedium)
-            val items = if (summary.count == 1) "1 item" else "${summary.count} items"
-            Text(
-                "$items · ${formatBytes(summary.bytes)} · emptied automatically after 7 days",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-    }
+    ToolCard(
+        icon = R.drawable.ic_copy,
+        title = "Duplicates",
+        subtitle = "Find identical copies of the same file",
+        onClick = onClick,
+        modifier = Modifier.testTag("duplicates_card"),
+        highlight = wastedBytes?.let { "${nbBytes(it)} in duplicates" },
+    )
 }
 
 @Composable
 private fun JunkCard(junkBytes: Long?, onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth().testTag("junk_card")) {
-        Column(Modifier.padding(16.dp)) {
-            Text("Junk cleanup", style = MaterialTheme.typography.titleMedium)
-            Text("Empty folders, temp files and thumbnail caches.", style = MaterialTheme.typography.bodyMedium)
-            if (junkBytes != null) {
-                Text(
-                    "${formatBytes(junkBytes)} of junk",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-        }
-    }
+    ToolCard(
+        icon = R.drawable.ic_sparkle,
+        title = "Junk cleanup",
+        subtitle = "Empty folders, temp files and thumbnail caches.",
+        onClick = onClick,
+        modifier = Modifier.testTag("junk_card"),
+        highlight = junkBytes?.let { "${nbBytes(it)} of junk" },
+    )
+}
+
+@Composable
+private fun TrashCard(summary: TrashSummary, onClick: () -> Unit) {
+    val items = if (summary.count == 1) "1 item" else "${summary.count} items"
+    ToolCard(
+        icon = R.drawable.ic_trash,
+        title = "Trash",
+        subtitle = "$items · emptied automatically after 7 days",
+        onClick = onClick,
+        modifier = Modifier.testTag("trash_card"),
+        badge = if (summary.count > 0) nbBytes(summary.bytes) else null,
+    )
 }
 
 @Composable
 private fun MalwareCard(signatureLine: String?, onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth().testTag("malware_card")) {
-        Column(Modifier.padding(16.dp)) {
-            Text("Malware check", style = MaterialTheme.typography.titleMedium)
-            Text("Compare apps and APK files with a list of known Android malware.", style = MaterialTheme.typography.bodyMedium)
-            if (signatureLine != null) {
-                Text(signatureLine, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-            }
-        }
-    }
+    ToolCard(
+        icon = R.drawable.ic_shield,
+        title = "Malware check",
+        subtitle = "Compare apps and APK files with a list of known Android malware.",
+        onClick = onClick,
+        modifier = Modifier.testTag("malware_card"),
+        highlight = signatureLine,
+    )
 }

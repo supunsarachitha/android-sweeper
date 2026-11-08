@@ -4,10 +4,12 @@ import android.os.ParcelFileDescriptor
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.supun.sweeper.files.Trash
@@ -69,7 +71,9 @@ class DuplicatesTest {
     }
 
     @Test fun findsOneGroupAndTrashesOneCopy() {
+        rule.onNodeWithTag("home_list").performScrollToNode(hasTestTag("duplicates_card"))
         rule.onNodeWithTag("duplicates_card").assertIsDisplayed()
+        rule.onNodeWithTag("home_list").performScrollToNode(hasTestTag("duplicates_card"))
         rule.onNodeWithTag("duplicates_card").performClick()
         rule.waitUntil(120_000) {
             rule.onAllNodesWithTag("keep_oldest_all_button").fetchSemanticsNodes().isNotEmpty()

@@ -3,8 +3,6 @@ package com.supun.sweeper.ui
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,18 +15,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -40,7 +34,6 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -56,7 +49,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -182,31 +174,18 @@ fun FilesScreen(resumeCount: Int, initialTab: Int, onBack: () -> Unit) {
     }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Large & old files") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Back")
-                    }
-                },
-            )
-        },
+        topBar = { SweeperTopBar("Large & old files", onBack = onBack) },
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             if (granted && loaded != null) {
-                BottomAppBar(contentPadding = PaddingValues(horizontal = 16.dp)) {
-                    Text(
-                        "${selectedFiles.size} selected · ${formatBytes(selectedBytes)}",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.weight(1f).testTag("selection_summary"),
-                    )
-                    Button(
-                        onClick = { confirm = true },
-                        enabled = selectedFiles.isNotEmpty() && !busy,
-                        modifier = Modifier.testTag("move_to_trash_button"),
-                    ) { Text("Move to trash") }
-                }
+                BottomActionBar(
+                    summary = "${selectedFiles.size} selected · ${nbBytes(selectedBytes)}",
+                    buttonText = "Move to trash",
+                    enabled = selectedFiles.isNotEmpty() && !busy,
+                    onClick = { confirm = true },
+                    summaryModifier = Modifier.testTag("selection_summary"),
+                    buttonModifier = Modifier.testTag("move_to_trash_button"),
+                )
             }
         },
     ) { padding ->
@@ -274,10 +253,15 @@ fun FilesScreen(resumeCount: Int, initialTab: Int, onBack: () -> Unit) {
                         ) { Text(if (allSelected) "Deselect all" else "Select all") }
                     }
                     if (visible.isEmpty()) {
-                        Text(
-                            "Nothing found",
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(16.dp),
+                        EmptyState(
+                            icon = R.drawable.ic_file,
+                            title = "Nothing found",
+                            body = when (tab) {
+                                TAB_LARGE -> "No files of $largeMb MB or more. Try a smaller size."
+                                TAB_OLD -> "No downloads older than $oldDays days. Try a shorter time."
+                                else -> "No APK files on your storage."
+                            },
+                            modifier = Modifier.testTag("files_empty"),
                         )
                     }
                     LazyColumn(
@@ -324,7 +308,7 @@ fun FilesScreen(resumeCount: Int, initialTab: Int, onBack: () -> Unit) {
 
 @Composable
 internal fun AllFilesAccessCard(onAllow: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("all_files_access_card")) {
+    Card(modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("all_files_access_card"), colors = sweeperCardColors()) {
         Column(Modifier.padding(16.dp)) {
             Text("All files access needed", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
@@ -354,13 +338,7 @@ private fun ScanProgress(seen: Int) {
 
 @Composable
 private fun ChipRow(options: List<Int>, selected: Int, label: (Int) -> String, onSelect: (Int) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
+    ChipFlow {
         options.forEach { option ->
             FilterChip(
                 selected = option == selected,
@@ -428,12 +406,12 @@ private fun FileRow(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                overflow = TextOverflow.MiddleEllipsis,
             )
         }
         Spacer(Modifier.width(12.dp))
         Column(horizontalAlignment = Alignment.End) {
-            Text(formatBytes(file.size), style = MaterialTheme.typography.titleSmall)
+            Text(nbBytes(file.size), style = MaterialTheme.typography.titleSmall)
             Text(
                 formatDate(file.lastModified),
                 style = MaterialTheme.typography.bodySmall,

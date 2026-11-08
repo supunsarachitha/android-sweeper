@@ -45,6 +45,7 @@ class SmokeTest {
 
     @Test fun appsScreenAsksForUsageAccessWhenRevoked() {
         setUsageAccess(false)
+        rule.onNodeWithTag("home_list").performScrollToNode(hasTestTag("apps_card"))
         rule.onNodeWithTag("apps_card").performClick()
         rule.waitForIdle()
         rule.onNodeWithTag("usage_access_card").assertIsDisplayed()
@@ -58,9 +59,11 @@ class SmokeTest {
         }
         rule.onNodeWithTag("breakdown_bar").assertIsDisplayed()
 
+        rule.onNodeWithTag("home_list").performScrollToNode(hasTestTag("apps_card"))
+
         rule.onNodeWithTag("apps_card").performClick()
         rule.waitUntil(30_000) {
-            rule.onAllNodesWithTag("app_row_com.supun.sweeper").fetchSemanticsNodes().isNotEmpty()
+            rule.onAllNodesWithTag("apps_list").fetchSemanticsNodes().isNotEmpty()
         }
         rule.onNodeWithTag("apps_list").performScrollToNode(hasTestTag("app_row_com.supun.sweeper"))
         rule.onNodeWithTag("app_row_com.supun.sweeper").assertIsDisplayed()
