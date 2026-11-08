@@ -10,6 +10,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -31,6 +32,11 @@ class CacheQueueTest {
 
     private fun weAreOnTop(): Boolean =
         shell("dumpsys activity activities").lines().any { it.contains("topResumedActivity") && it.contains(pkg) }
+
+    // Other tests expect Usage access off (it changes the Home layout).
+    @After fun revokeUsageAccess() {
+        shell("appops set $pkg GET_USAGE_STATS default")
+    }
 
     @Test fun clearCachesWalksThroughTheTickedAppAndShowsTheSummary() {
         shell("appops set $pkg GET_USAGE_STATS allow")
