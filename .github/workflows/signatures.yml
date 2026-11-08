@@ -36,9 +36,24 @@ jobs:
             exit 1
           fi
           mkdir -p export
+          BASE="https://mb-api.abuse.ch/v2/files/exports/${AUTH_KEY}"
+          # Prints status, size and the start of the reply when a download fails; long tokens are hidden.
+          probe() {
+            echo "--- probe: $1"
+            curl -sS --http1.1 --max-time 120 -D "export/$1.h" -o "export/$1.b" \
+              -w "http=%{http_code} bytes=%{size_download} type=%{content_type}\n" "$BASE/$1" || echo "curl exit $?"
+            sed -E 's/[A-Za-z0-9_-]{24,}/<hidden>/g' "export/$1.h" 2>/dev/null | head -15 || true
+            head -c 400 "export/$1.b" 2>/dev/null | tr -c '[:print:]\n' '.' | sed -E 's/[A-Za-z0-9_-]{24,}/<hidden>/g' | head -8 || true
+            echo
+          }
           # HTTP/1.1: the large export broke off mid-stream over HTTP/2 (curl error 92).
-          curl -fsS --http1.1 --retry 4 --retry-all-errors --retry-delay 20 --max-time 1200 -o export/full.zip \
-            "https://mb-api.abuse.ch/v2/files/exports/${AUTH_KEY}/full.csv.zip"
+          if ! curl -fsS --http1.1 --retry 4 --retry-all-errors --retry-delay 20 --max-time 1200 \
+                -o export/full.zip "$BASE/full.csv.zip"; then
+            echo "::error::Downloading the full export failed; diagnostics follow"
+            probe recent.csv
+            probe full.csv.zip
+            exit 1
+          fi
           python3 -I -m zipfile -l export/full.zip
           python3 -I -m zipfile -e export/full.zip export/
       - name: Build the Android hash list
