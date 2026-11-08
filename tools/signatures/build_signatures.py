@@ -1,13 +1,18 @@
-"""Build signatures.bin from a MalwareBazaar CSV export (Android samples only).
+"""Build signatures.bin (Android malware SHA-256 hashes) from MalwareBazaar data.
 
-usage: build_signatures.py <export.csv> <out signatures.bin> <out info.json> [--previous-info URL]
+usage: build_signatures.py <out signatures.bin> <out info.json>
+           [--csv FILE]...            MalwareBazaar CSV exports (full or recent)
+           [--api-json FILE]...       MalwareBazaar API replies (query=get_file_type)
+           [--previous FILE]          the currently published signatures.bin, ALREADY signature-checked;
+                                      its entries are kept (the list only grows)
+           [--previous-info URL]      info.json of the published list, for the shrink check
 
 Keeps rows whose file type is apk or dex (or whose MIME type is the APK type). Refuses to publish when the
-result is empty or less than half the size of the previous published file (a truncated download).
+result is empty or less than half the size of the previous published list.
 """
 import csv
+import argparse
 import hashlib
-import io
 import json
 import sys
 import time
@@ -38,8 +43,43 @@ def rows(path):
             yield [c.strip() for c in row]
 
 
-def build(csv_path):
-    entries = {}
+def add(entries, sha, ftype, mime, family):
+    """Adds one sample if it is an Android file with a valid SHA-256. Returns True if it was added."""
+    sha = (sha or "").strip().lower()
+    ftype = (ftype or "").strip().lower()
+    mime = (mime or "").strip().lower()
+    family = (family or "").strip()
+    if ftype not in ANDROID_TYPES and mime != APK_MIME:
+        return False
+    if len(sha) != 64 or any(c not in "0123456789abcdef" for c in sha):
+        return False
+    if not family or family.lower() in ("n/a", "null", "none"):
+        family = UNKNOWN_NAME
+    key = bytes.fromhex(sha)
+    # A named family beats "unknown" when the same sample shows up again.
+    if entries.get(key) in (None, UNKNOWN_NAME):
+        entries[key] = family
+    return True
+
+
+def add_api_json(entries, path):
+    """MalwareBazaar API reply: {"query_status": "ok", "data": [{"sha256_hash", "file_type", "signature", ...}]}"""
+    with open(path, encoding="utf-8") as f:
+        reply = json.load(f)
+    status = reply.get("query_status")
+    if status != "ok":
+        print(f"::warning::{path}: query_status={status}")
+        return 0
+    n = 0
+    for item in reply.get("data") or []:
+        if add(entries, item.get("sha256_hash"), item.get("file_type"), item.get("file_type_mime"),
+               item.get("signature")):
+            n += 1
+    return n
+
+
+def build(csv_path, entries=None):
+    entries = {} if entries is None else entries
     header = None
     for row in rows(csv_path):
         if header is None and "sha256_hash" in row:
@@ -50,37 +90,45 @@ def build(csv_path):
             header = {"first_seen_utc": 0, "sha256_hash": 1, "md5_hash": 2, "sha1_hash": 3, "reporter": 4,
                       "file_name": 5, "file_type_guess": 6, "mime_type": 7, "signature": 8}
         try:
-            sha = row[header["sha256_hash"]].lower()
-            ftype = row[header["file_type_guess"]].lower()
-            mime = row[header["mime_type"]].lower()
-            family = row[header["signature"]]
+            add(entries, row[header["sha256_hash"]], row[header["file_type_guess"]], row[header["mime_type"]],
+                row[header["signature"]])
         except IndexError:
             continue
-        if ftype not in ANDROID_TYPES and mime != APK_MIME:
-            continue
-        if len(sha) != 64 or any(c not in "0123456789abcdef" for c in sha):
-            continue
-        if not family or family.lower() in ("n/a", "null", "none"):
-            family = UNKNOWN_NAME
-        entries[bytes.fromhex(sha)] = family
     return entries
 
 
 def main(argv):
-    if len(argv) < 4:
-        print(__doc__)
-        return 2
-    csv_path, out_bin, out_info = argv[1:4]
+    ap = argparse.ArgumentParser(add_help=True)
+    ap.add_argument("out_bin")
+    ap.add_argument("out_info")
+    ap.add_argument("--csv", action="append", default=[])
+    ap.add_argument("--api-json", action="append", default=[])
+    ap.add_argument("--previous")
+    ap.add_argument("--previous-info")
+    args = ap.parse_args(argv[1:])
+
+    entries = {}
+    if args.previous:
+        _, prev_entries = decode(open(args.previous, "rb").read())
+        entries.update(prev_entries)
+        print(f"previous list: {len(prev_entries)} entries")
+    for path in args.csv:
+        before = len(entries)
+        build(path, entries)
+        print(f"{path}: +{len(entries) - before}")
+    for path in args.api_json:
+        before = len(entries)
+        add_api_json(entries, path)
+        print(f"{path}: +{len(entries) - before}")
+
     prev_count = 0
-    if "--previous-info" in argv:
-        url = argv[argv.index("--previous-info") + 1]
+    if args.previous_info:
         try:
-            prev_count = json.load(urllib.request.urlopen(url, timeout=30)).get("count", 0)
+            prev_count = json.load(urllib.request.urlopen(args.previous_info, timeout=30)).get("count", 0)
         except Exception as e:  # first run: nothing published yet
             print(f"no previous info ({e.__class__.__name__}); skipping the shrink check")
-    entries = build(csv_path)
     count = len(entries)
-    print(f"android hashes: {count} (previous {prev_count})")
+    print(f"android hashes: {count} (previous published {prev_count})")
     if count == 0:
         print("::error::no Android entries found; refusing to publish")
         return 1
@@ -90,13 +138,12 @@ def main(argv):
     created = int(time.time())
     data = encode(created, entries)
     decode(data)  # round-trip check with the strict parser
-    with open(out_bin, "wb") as f:
+    with open(args.out_bin, "wb") as f:
         f.write(data)
-    families = len(set(entries.values()))
-    info = {"format": 1, "created_at": created, "count": count, "families": families,
+    info = {"format": 1, "created_at": created, "count": count, "families": len(set(entries.values())),
             "sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data),
             "source": "MalwareBazaar (abuse.ch), CC0"}
-    with open(out_info, "w") as f:
+    with open(args.out_info, "w") as f:
         json.dump(info, f, indent=2)
         f.write("\n")
     print(json.dumps(info))
