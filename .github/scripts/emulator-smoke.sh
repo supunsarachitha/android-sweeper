@@ -4,6 +4,20 @@
 set -euo pipefail
 PKG=com.supun.sweeper
 
+mkdir -p screenshots
+# Always keep the device log with the screenshots, so a crash can be diagnosed from the artifact.
+cleanup_files() { :; }
+on_exit() {
+  adb logcat -d -t 4000 > screenshots/logcat.txt 2>/dev/null || true
+  cleanup_files
+}
+trap on_exit EXIT
+
+# Granting All files access to a running app can restart its process (the storage view changes), which
+# would kill the instrumented test. So grant it once up front; the tests' own grant is then a no-op.
+./gradlew --no-daemon installDebug
+adb shell appops set --uid "$PKG" MANAGE_EXTERNAL_STORAGE allow
+
 # Separate runs: connectedAndroidTest uninstalls the app when it finishes,
 # so installing in the same Gradle invocation would be undone.
 ./gradlew --no-daemon connectedDebugAndroidTest
@@ -25,8 +39,6 @@ shot() {
   fi
   adb exec-out screencap -p > "screenshots/$name"
 }
-
-mkdir -p screenshots
 
 # Usage access revoked: home with the "Grant" line, and the Apps permission card.
 adb shell appops set "$PKG" GET_USAGE_STATS default
@@ -50,7 +62,6 @@ TRASHED=11111111-1111-1111-1111-111111111111
 cleanup_files() {
   adb shell "rm -f $BIG $OLD $APKCOPY $TRASH/$TRASHED $TRASH/index.tsv $TRASH/.nomedia; rmdir $TRASH" || true
 }
-trap cleanup_files EXIT
 adb shell "dd if=/dev/zero of=$BIG bs=1048576 count=60"
 adb shell "echo old-report > $OLD; touch -d '2025-01-01' $OLD || touch -t 202501010000 $OLD"
 adb shell "cp \$(pm path $PKG | head -1 | cut -d: -f2) $APKCOPY"

@@ -61,16 +61,14 @@ class TrashTest {
     }
 
     @Test fun restoreConflictUsesRestoredNames() {
-        val original = file("Download/a.txt", "one")
-        val id1 = trash.trash(listOf(original)).moved.single().id
-        file("Download/a.txt", "two") // something new took the old name
+        val id1 = trash.trash(listOf(file("Download/a.txt", "one"))).moved.single().id
+        val id2 = trash.trash(listOf(file("Download/a.txt", "two"))).moved.single().id
+        file("Download/a.txt", "three") // something new took the old name
         assertEquals(File(root, "Download/a (restored).txt"), trash.restore(id1))
-        assertEquals("one", File(root, "Download/a (restored).txt").readText())
-
-        val id2 = trash.trash(listOf(File(root, "Download/a (restored).txt"))).moved.single().id
-        file("Download/a (restored).txt", "three")
         assertEquals(File(root, "Download/a (restored 2).txt"), trash.restore(id2))
-        assertEquals("two", File(root, "Download/a.txt").readText())
+        assertEquals("one", File(root, "Download/a (restored).txt").readText())
+        assertEquals("two", File(root, "Download/a (restored 2).txt").readText())
+        assertEquals("three", File(root, "Download/a.txt").readText())
     }
 
     @Test fun restoreConflictWithoutExtension() {

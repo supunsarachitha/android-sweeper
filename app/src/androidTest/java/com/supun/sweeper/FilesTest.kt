@@ -59,7 +59,7 @@ class FilesTest {
         } catch (e: Exception) {
             // Best effort; the emulator is thrown away after the run.
         }
-        shell("appops set --uid com.supun.sweeper MANAGE_EXTERNAL_STORAGE default")
+        // The grant stays: revoking it could restart the app process mid-run. The smoke script revokes it.
     }
 
     @Test fun homeShowsFilesAndTrashCards() {
