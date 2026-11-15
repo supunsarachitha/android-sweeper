@@ -32,3 +32,11 @@ fun openAppDetails(context: Context, packageName: String) {
         Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)),
     )
 }
+
+/** The system page where the user can allow this app's notifications. */
+fun openNotificationSettings(context: Context) {
+    startSafely(
+        context,
+        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName),
+    )
+}
