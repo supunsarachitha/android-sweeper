@@ -21,12 +21,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -45,7 +48,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.supun.sweeper.R
 import com.supun.sweeper.malware.formatCount
-import com.supun.sweeper.malware.formatSignatureDate
+import com.supun.sweeper.scan.RunStatus
+import com.supun.sweeper.scan.ScheduledScanStore
+import com.supun.sweeper.scan.formatRunDate
 import com.supun.sweeper.storage.DuplicateStats
 import com.supun.sweeper.storage.FileCleaner
 import com.supun.sweeper.storage.JunkStats
@@ -94,6 +99,31 @@ fun HomeScreen(
     val cleaner = remember { FileCleaner(context) }
     var trashSummary by remember { mutableStateOf(TrashSummary(0, 0)) }
 
+    // The protection line: the last scheduled scan, read the way the Malware screen's schedule card reads it.
+    // Null until the stored result has been read.
+    val scheduleChanges by ScheduledScanStore.changes.collectAsState()
+    var protection by remember { mutableStateOf<ProtectionLine?>(null) }
+    LaunchedEffect(resumeCount, scheduleChanges) {
+        val last = withContext(Dispatchers.IO) { ScheduledScanStore(context).loadResult() }
+        protection = if (last == null) {
+            ProtectionLine("Malware check: not run yet", false)
+        } else {
+            val what = when (last.status) {
+                RunStatus.NEEDS_FILES_ACCESS -> "needs All files access"
+                RunStatus.NO_LIST -> "no malware list yet"
+                RunStatus.DONE -> when (last.findings) {
+                    0 -> "nothing found"
+                    1 -> "1 item found"
+                    else -> "${last.findings} items found"
+                }
+            }
+            ProtectionLine(
+                "Last scan ${formatRunDate(last.finishedAtMillis)} · $what",
+                last.status == RunStatus.DONE && last.findings > 0,
+            )
+        }
+    }
+
     // The signature date and count for the Malware card; null until the stored list has been read.
     var signatureLine by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(resumeCount) {
@@ -103,9 +133,9 @@ fun HomeScreen(
             val line = if (list == null) {
                 "No signatures yet — tap to download"
             } else {
-                "Signatures from ${formatSignatureDate(list.createdAt)} · ${formatCount(list.count)} known samples"
+                "Signatures from ${formatListDate(list.createdAt)} · ${formatCount(list.count)} known samples"
             }
-            if (deepList == null) line else "$line · deep scan list: ${formatSignatureDate(deepList.createdAt)}"
+            if (deepList == null) line else "$line · deep scan list: ${formatListDate(deepList.createdAt)}"
         }
     }
 
@@ -125,13 +155,14 @@ fun HomeScreen(
     }
 
     Scaffold(
-        topBar = { SweeperTopBar("Android Sweeper") },
+        topBar = { SweeperTopBar("Android Sweeper", logo = R.drawable.ic_logo) },
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding).testTag("home_list"),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            protection?.let { line -> item { ProtectionLineRow(line, onOpenMalware) } }
             item { StorageCard(volume) }
             item {
                 if (granted) {
@@ -153,6 +184,34 @@ fun HomeScreen(
                     Text("Open Android storage settings")
                 }
             }
+        }
+    }
+}
+
+/** The line under the header: what the last scheduled scan found. [isFinding] colours it as a warning. */
+private data class ProtectionLine(val text: String, val isFinding: Boolean)
+
+@Composable
+private fun ProtectionLineRow(line: ProtectionLine, onClick: () -> Unit) {
+    val color = if (line.isFinding) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+    Card(onClick = onClick, modifier = Modifier.fillMaxWidth().testTag("protection_line"), colors = sweeperCardColors()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                painterResource(R.drawable.ic_shield),
+                contentDescription = null,
+                tint = if (line.isFinding) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(line.text, style = MaterialTheme.typography.bodyMedium, color = color, modifier = Modifier.weight(1f))
+            Icon(
+                painterResource(R.drawable.ic_chevron_right),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

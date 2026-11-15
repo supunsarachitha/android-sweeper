@@ -61,9 +61,6 @@ import com.supun.sweeper.storage.ApkInfo
 import com.supun.sweeper.storage.FileCleaner
 import com.supun.sweeper.util.formatBytes
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -85,8 +82,7 @@ internal fun relativeFolder(rootPath: String, path: String): String {
     return if (rel.isEmpty()) "Internal storage" else rel
 }
 
-internal fun formatDate(millis: Long): String =
-    SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(millis))
+internal fun formatDate(millis: Long): String = formatDay(millis)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -206,19 +202,19 @@ fun FilesScreen(resumeCount: Int, initialTab: Int, onBack: () -> Unit) {
                         Tab(
                             selected = tab == TAB_LARGE,
                             onClick = { tab = TAB_LARGE; selected = emptySet() },
-                            text = { Text("Large files") },
+                            text = { Text("Large files", maxLines = 1) },
                             modifier = Modifier.testTag("files_tab_large"),
                         )
                         Tab(
                             selected = tab == TAB_OLD,
                             onClick = { tab = TAB_OLD; selected = emptySet() },
-                            text = { Text("Old downloads") },
+                            text = { Text("Old", maxLines = 1) },
                             modifier = Modifier.testTag("files_tab_old"),
                         )
                         Tab(
                             selected = tab == TAB_APK,
                             onClick = { tab = TAB_APK; selected = emptySet() },
-                            text = { Text("APK files") },
+                            text = { Text("APK files", maxLines = 1) },
                             modifier = Modifier.testTag("files_tab_apk"),
                         )
                     }
@@ -338,7 +334,7 @@ private fun ScanProgress(seen: Int) {
 
 @Composable
 private fun ChipRow(options: List<Int>, selected: Int, label: (Int) -> String, onSelect: (Int) -> Unit) {
-    ChipFlow {
+    ChipScrollRow {
         options.forEach { option ->
             FilterChip(
                 selected = option == selected,

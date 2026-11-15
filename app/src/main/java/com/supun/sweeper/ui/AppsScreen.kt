@@ -273,6 +273,7 @@ fun AppsScreen(resumeCount: Int, onBack: () -> Unit, initialSelection: String = 
                         items(visible, key = { it.packageName }) { app ->
                             AppRow(
                                 app = app,
+                                sort = sort,
                                 checked = app.packageName in selected,
                                 onCheckedChange = { on ->
                                     val next = if (on) selected + app.packageName else selected - app.packageName
@@ -471,7 +472,7 @@ private fun AppsHeader(count: Int, cacheTotal: Long) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SortChips(selected: AppSort, onSelect: (AppSort) -> Unit) {
-    ChipFlow {
+    ChipScrollRow {
         sortLabels.forEach { (sort, label) ->
             val isSelected = selected == sort
             FilterChip(
@@ -495,7 +496,7 @@ private fun SortChips(selected: AppSort, onSelect: (AppSort) -> Unit) {
 }
 
 @Composable
-private fun AppRow(app: AppStorage, checked: Boolean, onCheckedChange: (Boolean) -> Unit, onClick: () -> Unit) {
+private fun AppRow(app: AppStorage, sort: AppSort, checked: Boolean, onCheckedChange: (Boolean) -> Unit, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -523,12 +524,14 @@ private fun AppRow(app: AppStorage, checked: Boolean, onCheckedChange: (Boolean)
                 Spacer(Modifier.width(12.dp))
                 Text(nbBytes(app.totalBytes), style = MaterialTheme.typography.titleMedium, maxLines = 1)
             }
-            // Number and unit are joined with a no-break space, so a wrap can only fall between the three parts.
+            // Two lines per row: name and total, then size and cache. Number and unit are joined with a no-break
+            // space. Sorting by data shows the data size instead of the app size.
+            val sizeLabel = if (sort == AppSort.DATA) "Data ${nbBytes(app.dataBytes)}" else "App ${nbBytes(app.appBytes)}"
             Text(
-                "App ${nbBytes(app.appBytes)} · Data ${nbBytes(app.dataBytes)} · Cache ${nbBytes(app.cacheBytes)}",
+                "$sizeLabel · Cache ${nbBytes(app.cacheBytes)}",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }

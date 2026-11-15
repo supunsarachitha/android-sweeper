@@ -241,7 +241,7 @@ fun DuplicatesScreen(resumeCount: Int, demoKeepOldest: Boolean, onBack: () -> Un
                                 onToggle = { path -> selection = selection.toggle(group, path) },
                                 onKeepOldest = { selection = selection.keepOldest(group) },
                             )
-                            Spacer(Modifier.height(8.dp))
+                            Spacer(Modifier.height(12.dp))
                         }
                     }
                 }
@@ -305,24 +305,23 @@ private fun GroupCard(
 ) {
     Card(modifier = Modifier.fillMaxWidth().testTag("dup_group_$index"), colors = sweeperCardColors()) {
         Column(Modifier.padding(vertical = 8.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
+            // The name gets the whole width; the count and "Keep oldest" share the line below it.
+            Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp)) {
+                Text(
+                    group.oldest.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.MiddleEllipsis,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        group.oldest.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        "${copies(group.files.size)} · ${formatBytes(group.size)} each",
+                        "${copies(group.files.size)} · ${nbBytes(group.size)} each",
                         style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
                     )
-                }
-                TextButton(onClick = onKeepOldest, modifier = Modifier.testTag("keep_oldest_$index")) {
-                    Text("Keep oldest")
+                    TextButton(onClick = onKeepOldest, modifier = Modifier.testTag("keep_oldest_$index")) {
+                        Text("Keep oldest")
+                    }
                 }
             }
             group.files.forEachIndexed { i, file ->
@@ -348,7 +347,7 @@ private fun GroupCard(
                             file.name,
                             style = MaterialTheme.typography.bodyLarge,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                            overflow = TextOverflow.MiddleEllipsis,
                         )
                         Text(
                             relativeFolder(rootPath, file.path),

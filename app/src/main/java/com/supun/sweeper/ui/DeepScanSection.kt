@@ -28,7 +28,6 @@ import com.supun.sweeper.malware.DeepMatch
 import com.supun.sweeper.malware.DeepScanResult
 import com.supun.sweeper.malware.SignatureStore
 import com.supun.sweeper.malware.formatCount
-import com.supun.sweeper.malware.formatSignatureDate
 import com.supun.sweeper.util.formatBytes
 
 internal const val DEEP_NON_ANDROID_NOTE =
@@ -60,15 +59,23 @@ internal fun DeepScanCard(
             Text("Deep scan (all files)", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(4.dp))
             Text(
-                "Checks every file on your storage, not only apps, against $samples of all kinds. " +
-                    "Files over 100 MB are skipped unless you include them below. " +
-                    "This can take a long time on a full phone.",
+                "Checks every file on your storage, not only apps, against $samples of all kinds.",
                 style = MaterialTheme.typography.bodyMedium,
             )
-            Spacer(Modifier.height(8.dp))
+            ExpandableRow(title = "How it works", tag = "deep_how_it_works") {
+                Text(
+                    "Each file is compared with the list by its fingerprint (SHA-256), on the phone. " +
+                        "Files over 100 MB are skipped unless you include them below. " +
+                        "Hidden folders are checked too. This can take a long time on a full phone.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+            }
+            Spacer(Modifier.height(4.dp))
             if (header != null) {
                 Text(
-                    "List from ${formatSignatureDate(header.createdAt)} · ${formatCount(header.count.toInt())} known samples",
+                    "List from ${formatListDate(header.createdAt)} · ${formatCount(header.count.toInt())} known samples",
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.testTag("deep_list_info"),
                 )
@@ -92,7 +99,7 @@ internal fun DeepScanCard(
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 }
                 Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = onCancel, modifier = Modifier.testTag("deep_scan_cancel")) { Text("Cancel") }
+                OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth().testTag("deep_scan_cancel")) { Text("Cancel") }
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Text(
@@ -108,11 +115,11 @@ internal fun DeepScanCard(
                     )
                 }
                 Spacer(Modifier.height(8.dp))
-                Button(onClick = onScan, enabled = !busy, modifier = Modifier.testTag("deep_scan_button")) {
+                Button(onClick = onScan, enabled = !busy, modifier = Modifier.fillMaxWidth().testTag("deep_scan_button")) {
                     Text("Deep scan")
                 }
                 Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = onUpdate, enabled = !busy, modifier = Modifier.testTag("update_deep_list_button")) {
+                OutlinedButton(onClick = onUpdate, enabled = !busy, modifier = Modifier.fillMaxWidth().testTag("update_deep_list_button")) {
                     Text("Update deep-scan list")
                 }
             }
@@ -120,12 +127,6 @@ internal fun DeepScanCard(
                 Spacer(Modifier.height(8.dp))
                 Text(message, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("deep_message"))
             }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "The list is one signed file from GitHub, downloaded when you tap a button here or when a scheduled scan runs on Wi-Fi. Nothing else is sent.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }
@@ -162,10 +163,7 @@ internal fun DeepCleanCard(result: DeepScanResult) {
 internal fun DeepMatchCard(match: DeepMatch, busy: Boolean, onTrash: () -> Unit) {
     val dark = isSystemInDarkTheme()
     val colors = if (match.isAndroid) {
-        CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer,
-            contentColor = MaterialTheme.colorScheme.onErrorContainer,
-        )
+        findingCardColors()
     } else {
         CardDefaults.cardColors(
             containerColor = if (dark) Color(0xFF5C3B00) else Color(0xFFFFE0B2),
