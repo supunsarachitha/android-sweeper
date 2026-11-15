@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="56"
+    android:viewportHeight="56">
+    <!-- In-app logo: the app icon's shield with the sparkles cut out; tinted where it is used. -->
+    <group android:translateX="-26" android:translateY="-26.5">
+        <path android:fillColor="#FFFFFF" android:fillType="evenOdd" android:pathData="M54,29 C61,32.5 67.5,34.5 75,35.5 L75,52 C75,65.5 66.5,74.5 54,80 C41.5,74.5 33,65.5 33,52 L33,35.5 C40.5,34.5 47,32.5 54,29 Z M51.5,45.5 Q53.34,55.16 63,57 Q53.34,58.84 51.5,68.5 Q49.66,58.84 40,57 Q49.66,55.16 51.5,45.5 Z M62.5,39.5 Q63.3,43.7 67.5,44.5 Q63.3,45.3 62.5,49.5 Q61.7,45.3 57.5,44.5 Q61.7,43.7 62.5,39.5 Z" />
+    </group>
+</vector>

@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/images/icon.png" width="96" alt="Android Sweeper icon"></p>
+
 # Android Sweeper
 
 A personal Android storage cleaner. It is sideloaded (not on Google Play) and sends nothing
