@@ -100,7 +100,7 @@ repository (`.github/workflows/signatures.yml`) turns it into `signatures.bin`, 
 publishes it, with `signatures.bin.sig`, on the `signatures` branch. The file format is
 described in `tools/signatures/sigformat.py`.
 
-**Updates.** The list is downloaded only when you tap **Update signatures**, or when you open
+**Updates.** The list is downloaded only when you tap **Update list**, or when you open
 the Malware screen and the installed list is at least 7 days old. The only background work is the
 optional scheduled scan (above), which updates both lists when it runs on an unmetered Wi-Fi network.
 The screen warns when the list is more than 14 days old. A phone with no list yet downloads

@@ -76,6 +76,34 @@ SHOT_WAIT=10 shot no files-old-light.png --es open files --es tab old
 SHOT_WAIT=10 shot no files-apk-light.png --es open files --es tab apk
 SHOT_WAIT=10 shot yes files-dark.png --es open files
 
+# The size chips scroll sideways: swipe along the chip row and take a second picture.
+UI_DUMP_CHIPS=/data/local/tmp/sweeper-chips.xml
+swipe_along() {
+  # swipe_along <text of a node in the row>: a leftward swipe on the row that holds it.
+  local needle="$1" box
+  adb shell "uiautomator dump $UI_DUMP_CHIPS" >/dev/null 2>&1 || true
+  box=$(adb shell "cat $UI_DUMP_CHIPS" | sed 's/>/>\n/g' | grep "text=\"$needle\"" | head -1 | grep -o 'bounds="[^"]*"' | grep -o '[0-9]*' | tr '\n' ' ' || true)
+  set -- $box
+  if [ "$#" -ne 4 ]; then
+    echo "Could not find '$needle' to swipe along" >&2
+    return 0
+  fi
+  local y=$(( ($2 + $4) / 2 ))
+  local size w
+  size=$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -1)
+  w=${size%x*}
+  adb shell input swipe $((w * 9 / 10)) "$y" $((w / 10)) "$y" 400
+  sleep 1
+}
+SHOT_WAIT=10 shot no files-chips-scrolled-light.png --es open files
+swipe_along "50 MB"
+adb exec-out screencap -p > screenshots/files-chips-scrolled-light.png
+adb shell "rm -f $UI_DUMP_CHIPS" || true
+
+# Nothing in the trash yet (the trashed file is created below): the empty state.
+SHOT_WAIT=6 shot no trash-empty-light.png --es open trash
+SHOT_WAIT=6 shot yes trash-empty-dark.png --es open trash
+
 # A trashed file, written the way the app writes it (see Trash.kt): <trash>/<id> plus a TSV index line.
 adb shell "mkdir -p $TRASH && dd if=/dev/zero of=$TRASH/$TRASHED bs=1048576 count=5"
 adb shell "printf '$TRASHED\t%s000\t5242880\t/storage/emulated/0/Download/holiday-video.mp4\n' \$(date +%s) > $TRASH/index.tsv"
@@ -247,6 +275,12 @@ adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS
 shot_when no schedule-light.png "Last run" 90 --es open malware --es demo schedule
 shot_when yes schedule-dark.png "Last run" 90 --es open malware --es demo schedule
 
+# Home with the protection line (the demo run above is stored as "nothing found"), and the malware list card.
+shot_when no home-protection-light.png "Last scan" 90 --es demo schedule
+shot_when yes home-protection-dark.png "Last scan" 90 --es demo schedule
+shot_when no malware-card-light.png "Known-malware list" 90 --es open malware --es demo schedule
+shot_when yes malware-card-dark.png "Known-malware list" 90 --es open malware --es demo schedule
+
 adb shell "dd if=/dev/urandom of=$SCHED_FILE bs=1024 count=64"
 SCHED_HASH=$(adb shell "sha256sum $SCHED_FILE" | tr -d '\r' | cut -d' ' -f1)
 if [ "${#SCHED_HASH}" -ne 64 ]; then
@@ -290,3 +324,39 @@ adb shell pm revoke "$PKG" android.permission.POST_NOTIFICATIONS || true
 
 adb shell cmd uimode night no
 adb shell appops set --uid "$PKG" MANAGE_EXTERNAL_STORAGE default
+
+# --- Launcher icon ------------------------------------------------------------------------------
+# HOME, then the app drawer (swipe up from the bottom), scrolled until the app's label is on screen.
+# Not fatal: launchers differ, and the pictures only show the icon.
+launcher_shot() {
+  local name="$1" size w h tries=0
+  size=$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -1)
+  w=${size%x*}
+  h=${size#*x}
+  adb shell input keyevent KEYCODE_HOME
+  sleep 3
+  adb shell input swipe $((w / 2)) $((h * 9 / 10)) $((w / 2)) $((h / 5)) 300
+  sleep 3
+  while [ "$tries" -lt 8 ]; do
+    adb shell "rm -f $UI_DUMP" || true
+    adb shell "uiautomator dump $UI_DUMP" >/dev/null 2>&1 || true
+    if adb shell "grep -q 'Sweeper' $UI_DUMP" >/dev/null 2>&1; then
+      echo "Found the app in the drawer after $tries scrolls"
+      break
+    fi
+    adb shell input swipe $((w / 2)) $((h * 3 / 4)) $((w / 2)) $((h / 4)) 300
+    sleep 2
+    tries=$((tries + 1))
+  done
+  adb exec-out screencap -p > "screenshots/$name"
+  adb shell input keyevent KEYCODE_HOME
+  sleep 1
+}
+adb shell cmd uimode night no
+launcher_shot launcher-light.png || echo "Launcher picture (light) skipped"
+adb shell cmd uimode night yes
+adb shell settings put secure themed_icon_enabled 1 || true
+launcher_shot launcher-dark.png || echo "Launcher picture (dark) skipped"
+adb shell settings put secure themed_icon_enabled 0 || true
+adb shell cmd uimode night no
+adb shell "rm -f $UI_DUMP" || true
