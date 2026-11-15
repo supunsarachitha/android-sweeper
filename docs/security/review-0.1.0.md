@@ -119,6 +119,8 @@ The biggest real risk of a cleaner is deleting the wrong files. These rules appl
 | 8 | Fixed | `check-apk.sh` runs on every build and again before publishing: permission allowlist (INTERNET never allowed), not debuggable/testOnly, exactly one signing certificate equal to `.github/signing-cert-sha256.txt`. Release notes carry the APK SHA-256 and certificate fingerprint. |
 | 9 | Fixed | `dataExtractionRules` exclude all domains from cloud backup and device transfer |
 
+2026-11-15: Gradle updated to 9.9.1 for GHSA-3cfg-jpcr-gfp3, GHSA-gqrr-4j89-5267 and GHSA-pcp8-98xm-c6pr (published 2026-11-10, affecting 9.0.0 to 9.9.0), which the weekly scan reported.
+
 Remaining, accepted: the scan reports build-time-only advisories inside AGP's own dependencies (Guava, BouncyCastle, commons-lang3, httpclient, jose4j, jdom2) as warnings. They run only inside the build, never ship in the APK, and are fixed by AGP updates.
 
 Not tested: dependency verification against a tampered artifact. Gradle enforces it whenever the metadata file is present; no tamper test was run.
