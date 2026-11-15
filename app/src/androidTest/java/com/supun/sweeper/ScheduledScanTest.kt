@@ -234,9 +234,9 @@ class ScheduledScanTest {
 
         // The card shows the last run (the screen was open while the job ran).
         rule.waitUntil(30_000) {
-            runCatching { rule.onNodeWithTag("schedule_last_run").assertTextContains("2 items found") }.isSuccess
+            runCatching { rule.onNodeWithTag("schedule_last_run").assertTextContains("2 items found", substring = true) }.isSuccess
         }
-        rule.onNodeWithTag("schedule_last_run").assertTextContains("Last run:")
+        rule.onNodeWithTag("schedule_last_run").assertTextContains("Last run:", substring = true)
 
         // A notification was posted: counts only, no names.
         var posted: Notification? = null
