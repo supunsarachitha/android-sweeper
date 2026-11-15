@@ -9,4 +9,10 @@ object DemoHook {
 
     @Suppress("UNUSED_PARAMETER")
     fun installDeep(context: Context, fileHash: String?) = Unit
+
+    @Suppress("UNUSED_PARAMETER")
+    fun installSchedule(context: Context) = Unit
+
+    @Suppress("UNUSED_PARAMETER")
+    fun installScheduleRun(context: Context, fileHash: String?) = Unit
 }

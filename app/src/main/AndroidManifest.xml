@@ -21,6 +21,13 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Lets the Malware check open Android's own "Uninstall this app?" dialog (Intent.ACTION_DELETE). -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <!-- Android 13+: lets the scheduled malware scan show its short summary notification. Asked for when the
+         schedule is turned on; the scan runs without it and shows its result on the Malware screen. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Lets a scheduled scan survive a restart of the phone: the system refuses persisted jobs without it. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Lets the scheduled scan ask whether the phone is on Wi-Fi before it updates the malware lists. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Android 8-10 equivalent of "All files access". -->
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
@@ -47,5 +54,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Runs the scheduled malware scan while the phone charges. Only the system can bind to it. -->
+        <service
+            android:name=".scan.ScheduledScanService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
     </application>
 </manifest>
