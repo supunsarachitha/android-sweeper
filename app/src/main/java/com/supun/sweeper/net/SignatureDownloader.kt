@@ -1,5 +1,6 @@
 package com.supun.sweeper.net
 
+import com.supun.sweeper.malware.DeepListSource
 import com.supun.sweeper.malware.SignatureSource
 import com.supun.sweeper.malware.SignedFile
 import java.io.ByteArrayOutputStream
@@ -8,6 +9,7 @@ import java.io.InputStream
 import java.net.URI
 import java.net.URISyntaxException
 import java.net.URL
+import java.util.Locale
 import javax.net.ssl.HttpsURLConnection
 
 // This is the ONLY file in the app that talks to the network. CI (.github/scripts/check-network.sh) fails the
@@ -26,6 +28,21 @@ const val ALL_DATA_FILE = "signatures-all.bin"
 const val ALL_SIG_FILE = "signatures-all.bin.sig"
 const val MAX_ALL_LIST_BYTES = 256 * 1024 * 1024
 
+/**
+ * The deep-scan list as a base list plus numbered update files (same folder, same signing key). The base is
+ * renewed about monthly; the update files hold the new samples since. [ALL_DATA_FILE] stays for app version 0.9.0.
+ */
+const val ALL_BASE_DATA_FILE = "signatures-all-base.bin"
+const val ALL_BASE_SIG_FILE = "signatures-all-base.bin.sig"
+const val MAX_DELTA_BYTES = 8 * 1024 * 1024
+const val MAX_DELTA_NUMBER = 40
+
+/** "signatures-all-delta-07.bin" for update file 7. */
+fun deltaDataFile(seq: Int): String = String.format(Locale.ROOT, "signatures-all-delta-%02d.bin", seq)
+
+/** "signatures-all-delta-07.bin.sig" for update file 7. */
+fun deltaSigFile(seq: Int): String = deltaDataFile(seq) + ".sig"
+
 /** The lists the app can download: the file names and the size cap of each. */
 enum class SignatureList(val dataFile: String, val sigFile: String, val maxBytes: Int) {
     ANDROID(SIGNATURE_DATA_FILE, SIGNATURE_SIG_FILE, MAX_LIST_BYTES),
@@ -38,6 +55,7 @@ private const val ALLOWED_PATH_PREFIX = "/supunsarachitha/android-sweeper/signat
 private const val CONNECT_TIMEOUT_MS = 15_000
 private const val READ_TIMEOUT_MS = 60_000
 private const val HTTP_OK = 200
+private const val HTTP_NOT_FOUND = 404
 private val FILE_NAME = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 
 /**
@@ -94,7 +112,7 @@ internal fun readCapped(input: InputStream, maxBytes: Int, expectedLength: Long 
  * Downloads the signature list and its signature. Nothing is trusted here: the caller verifies the signature.
  * Redirects are not followed (any answer other than 200 fails), so a request can never be sent elsewhere.
  */
-class SignatureDownloader(private val versionName: String) : SignatureSource {
+class SignatureDownloader(private val versionName: String) : SignatureSource, DeepListSource {
     /** The Android list (the quick scan's). */
     @Throws(IOException::class)
     override fun fetch(): SignedFile = fetch(SignatureList.ANDROID)
@@ -106,7 +124,31 @@ class SignatureDownloader(private val versionName: String) : SignatureSource {
         return SignedFile(data, sig)
     }
 
-    private fun download(address: String, maxBytes: Int): ByteArray {
+    /** The base list's signature file alone (71 bytes): when it differs from the stored one, a new base is out. */
+    @Throws(IOException::class)
+    override fun fetchBaseSig(): ByteArray = download(SIGNATURE_BASE_URL + ALL_BASE_SIG_FILE, MAX_SIGNATURE_BYTES)
+
+    @Throws(IOException::class)
+    override fun fetchBase(): SignedFile {
+        val sig = download(SIGNATURE_BASE_URL + ALL_BASE_SIG_FILE, MAX_SIGNATURE_BYTES)
+        val data = download(SIGNATURE_BASE_URL + ALL_BASE_DATA_FILE, MAX_ALL_LIST_BYTES)
+        return SignedFile(data, sig)
+    }
+
+    /** Update file [seq] (1 to 40) with its signature; null when the server answers 404, which means "no more updates". */
+    @Throws(IOException::class)
+    override fun fetchDelta(seq: Int): SignedFile? {
+        if (seq < 1 || seq > MAX_DELTA_NUMBER) throw IOException("no such update file")
+        val data = downloadOrNull(SIGNATURE_BASE_URL + deltaDataFile(seq), MAX_DELTA_BYTES) ?: return null
+        val sig = download(SIGNATURE_BASE_URL + deltaSigFile(seq), MAX_SIGNATURE_BYTES)
+        return SignedFile(data, sig)
+    }
+
+    private fun download(address: String, maxBytes: Int): ByteArray =
+        downloadOrNull(address, maxBytes) ?: throw IOException("server answered $HTTP_NOT_FOUND")
+
+    /** The body of a 200 answer, null for 404, an [IOException] for anything else. */
+    private fun downloadOrNull(address: String, maxBytes: Int): ByteArray? {
         if (!isAllowedSignatureUrl(address)) throw IOException("address not allowed")
         val connection = URL(address).openConnection() as? HttpsURLConnection
             ?: throw IOException("not a secure connection")
@@ -119,6 +161,7 @@ class SignatureDownloader(private val versionName: String) : SignatureSource {
             connection.setRequestProperty("User-Agent", "AndroidSweeper/$versionName")
             connection.setRequestProperty("Accept-Encoding", "identity") // keeps Content-Length, so a big list is read into one array
             val code = connection.responseCode
+            if (code == HTTP_NOT_FOUND) return null
             if (code != HTTP_OK) throw IOException("server answered $code")
             if (!isAllowedSignatureUrl(connection.url.toString())) throw IOException("unexpected address")
             if (connection.contentLengthLong > maxBytes) throw IOException("file too large")

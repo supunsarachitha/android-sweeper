@@ -113,6 +113,22 @@ class SignatureUrlTest {
         assertRejected(base + "sub/signatures-all.bin")
     }
 
+    @Test fun theBaseAndUpdateFileNamesAreAllowedAndMatchThePublisher() {
+        assertEquals("signatures-all-base.bin", ALL_BASE_DATA_FILE)
+        assertEquals("signatures-all-base.bin.sig", ALL_BASE_SIG_FILE)
+        assertEquals("signatures-all-delta-01.bin", deltaDataFile(1))
+        assertEquals("signatures-all-delta-09.bin.sig", deltaSigFile(9))
+        assertEquals("signatures-all-delta-40.bin", deltaDataFile(40))
+        assertEquals(8 * 1024 * 1024, MAX_DELTA_BYTES)
+        assertEquals(40, MAX_DELTA_NUMBER)
+        assertTrue(isAllowedSignatureUrl(SIGNATURE_BASE_URL + ALL_BASE_DATA_FILE))
+        assertTrue(isAllowedSignatureUrl(SIGNATURE_BASE_URL + ALL_BASE_SIG_FILE))
+        for (seq in 1..MAX_DELTA_NUMBER) {
+            assertTrue(isAllowedSignatureUrl(SIGNATURE_BASE_URL + deltaDataFile(seq)))
+            assertTrue(isAllowedSignatureUrl(SIGNATURE_BASE_URL + deltaSigFile(seq)))
+        }
+    }
+
     @Test fun signatureListNamesAndCaps() {
         assertEquals("signatures.bin", SignatureList.ANDROID.dataFile)
         assertEquals("signatures.bin.sig", SignatureList.ANDROID.sigFile)

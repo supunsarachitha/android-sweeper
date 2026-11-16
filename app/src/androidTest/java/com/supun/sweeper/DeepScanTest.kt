@@ -14,8 +14,9 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.supun.sweeper.files.Trash
+import com.supun.sweeper.malware.DeepListStore
+import com.supun.sweeper.malware.DeepListTestSource
 import com.supun.sweeper.malware.InstallResult
-import com.supun.sweeper.malware.SignatureStore
 import com.supun.sweeper.malware.SignatureTestKit
 import com.supun.sweeper.malware.SignatureVerifier
 import com.supun.sweeper.storage.MalwareSignatures
@@ -41,7 +42,7 @@ class DeepScanTest {
     private val fileName = "sweeper-deep-test.exe"
     private val folder = "/sdcard/Documents/.hidden"
     private val path = "$folder/$fileName"
-    private var store: SignatureStore? = null
+    private var store: DeepListStore? = null
 
     /** Runs a shell command and reads its output to the end, so the command has finished. */
     private fun shell(command: String): String {
@@ -78,16 +79,13 @@ class DeepScanTest {
     private fun installAllList(entries: List<Pair<ByteArray, String>>) {
         val kit = SignatureTestKit()
         val dir = File(InstrumentationRegistry.getInstrumentation().targetContext.filesDir, "signatures-all-test")
-        val testStore = SignatureStore(
-            dir,
-            verifier = SignatureVerifier(kit.publicKeyBase64),
-            maxDataBytes = SignatureStore.MAX_ALL_DATA_BYTES,
-        )
+        val testStore = DeepListStore(dir, verifier = SignatureVerifier(kit.publicKeyBase64))
         store = testStore
         testStore.clear()
         val (data, sig) = kit.signedFile(System.currentTimeMillis() / 1000, entries)
-        assertTrue(testStore.install(data, sig) is InstallResult.Updated)
+        assertTrue(testStore.installBase(data, sig) is InstallResult.Updated)
         MalwareSignatures.useAllStoreForTests(testStore)
+        MalwareSignatures.useDeepSourceForTests(DeepListTestSource(sig)) // a deep scan updates first: no network here
         // Restart the activity so the screens use the new store and read the permission state.
         rule.activityRule.scenario.recreate()
         rule.waitForIdle()
@@ -109,6 +107,7 @@ class DeepScanTest {
         }
         store?.clear()
         MalwareSignatures.useAllStoreForTests(null)
+        MalwareSignatures.useDeepSourceForTests(null)
     }
 
     @Test fun deepScanFindsAWindowsProgramInAHiddenFolderAndMovesItToTheTrash() {
@@ -143,13 +142,13 @@ class DeepScanTest {
 
     @Test fun deepScanCardOffersADownloadWhenNoListIsStored() {
         shell("appops set --uid com.supun.sweeper MANAGE_EXTERNAL_STORAGE allow")
-        val empty = SignatureStore(
+        val empty = DeepListStore(
             File(InstrumentationRegistry.getInstrumentation().targetContext.filesDir, "signatures-all-empty"),
-            maxDataBytes = SignatureStore.MAX_ALL_DATA_BYTES,
         )
         empty.clear()
         store = empty
         MalwareSignatures.useAllStoreForTests(empty)
+        MalwareSignatures.useDeepSourceForTests(DeepListTestSource(null))
         rule.activityRule.scenario.recreate()
         rule.waitForIdle()
 

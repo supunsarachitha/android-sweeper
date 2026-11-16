@@ -17,6 +17,8 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.supun.sweeper.files.Trash
+import com.supun.sweeper.malware.DeepListStore
+import com.supun.sweeper.malware.DeepListTestSource
 import com.supun.sweeper.malware.InstallResult
 import com.supun.sweeper.malware.SignatureStore
 import com.supun.sweeper.malware.SignatureTestKit
@@ -61,7 +63,7 @@ class ScheduledScanTest {
     private val exePath = "$exeFolder/$exeName"
     private val day = 24L * 60 * 60 * 1000
     private var quickStore: SignatureStore? = null
-    private var allStore: SignatureStore? = null
+    private var allStore: DeepListStore? = null
 
     /** Runs a shell command and reads its output to the end, so the command has finished. */
     private fun shell(command: String): String {
@@ -117,11 +119,7 @@ class ScheduledScanTest {
         quickStore = quick
         MalwareSignatures.useStoreForTests(quick)
 
-        val all = SignatureStore(
-            File(filesDir, "signatures-all-sched-test"),
-            verifier = SignatureVerifier(kit.publicKeyBase64),
-            maxDataBytes = SignatureStore.MAX_ALL_DATA_BYTES,
-        )
+        val all = DeepListStore(File(filesDir, "signatures-all-sched-test"), verifier = SignatureVerifier(kit.publicKeyBase64))
         all.clear()
         val (aData, aSig) = kit.signedFile(
             System.currentTimeMillis() / 1000,
@@ -130,9 +128,10 @@ class ScheduledScanTest {
                 MessageDigest.getInstance("SHA-256").digest("another sample".toByteArray()) to "OtherFamily (pdf)",
             ),
         )
-        assertTrue(all.install(aData, aSig) is InstallResult.Updated)
+        assertTrue(all.installBase(aData, aSig) is InstallResult.Updated)
         allStore = all
         MalwareSignatures.useAllStoreForTests(all)
+        MalwareSignatures.useDeepSourceForTests(DeepListTestSource(aSig))
     }
 
     @Before fun setUp() {
@@ -163,6 +162,7 @@ class ScheduledScanTest {
         allStore?.clear()
         MalwareSignatures.useStoreForTests(null)
         MalwareSignatures.useAllStoreForTests(null)
+        MalwareSignatures.useDeepSourceForTests(null)
         // POST_NOTIFICATIONS stays granted: revoking a runtime permission kills the app's process, and with it
         // this test run. The app is uninstalled when the instrumented run ends, which resets it.
     }
