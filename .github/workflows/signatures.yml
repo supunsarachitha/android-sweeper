@@ -4,6 +4,11 @@ name: Malware signatures
 # tools/signatures/sigformat.py, signed with ECDSA P-256:
 #   signatures.bin      Android samples (APK/DEX): the quick malware check
 #   signatures-all.bin  every file type (Windows programs, documents, scripts, archives...): the deep scan
+# The deep-scan list is also published as a base list (about once a month) plus small signed update files with
+# the new samples of the other days, so a phone does not download the whole list every time:
+#   signatures-all-base.bin, signatures-all-delta-01.bin ... -40.bin (each with a .sig), info-all-base.json
+# (tools/signatures/publish_all_deltas.py decides which files are new; signatures-all.bin stays for older app
+# versions).
 # The lists grow over time: each daily run merges the last 48 hours (recent.csv), the newest samples per file
 # type from the API and, when it downloads completely, the full export into the published lists (whose
 # signatures are checked first). The result replaces the "signatures" branch (one commit, no history), which
@@ -65,7 +70,7 @@ jobs:
         id: build
         run: |
           RAW="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/signatures"
-          mkdir -p out prev
+          mkdir -p out prev prev-all work
           inputs=()
           for f in export/recent.csv export/full/*.csv; do [ -f "$f" ] && inputs+=(--csv "$f"); done
           for f in export/api-*.json; do [ -f "$f" ] && inputs+=(--api-json "$f"); done
@@ -109,6 +114,32 @@ jobs:
           }
           build signatures info.json android
           build signatures-all info-all.json all
+
+          # The deep-scan list as base + update files. Download what is published (every file checked against
+          # the public key; a bad signature stops the run), then let the script decide what is new.
+          # fetch_checked <name>: 0 = downloaded and verified, 44 = not published (404).
+          fetch_checked() {
+            local name=$1 code
+            code=$(curl -sS -o "prev-all/$name" -w '%{http_code}' "$RAW/$name")
+            if [ "$code" = 404 ]; then rm -f "prev-all/$name"; return 44; fi
+            if [ "$code" != 200 ]; then echo "::error::Unexpected answer $code for $name"; exit 1; fi
+            curl -fsS -o "prev-all/$name.sig" "$RAW/$name.sig"
+            if ! openssl dgst -sha256 -verify .github/signatures-public.pem -signature "prev-all/$name.sig" "prev-all/$name"; then
+              echo "::error::The published $name does not verify; not building on it"
+              exit 1
+            fi
+          }
+          if fetch_checked signatures-all-base.bin; then
+            for n in $(seq -w 1 40); do
+              fetch_checked "signatures-all-delta-$n.bin" || break # 404: no more update files
+            done
+          else
+            echo "No published signatures-all-base.bin yet; the first one is made now."
+          fi
+          ls -l prev-all
+          python3 -I tools/signatures/publish_all_deltas.py --full out/signatures-all.bin --prev prev-all --out out \
+            --needs-signing work/needs-signing.txt
+          if [ -s work/needs-signing.txt ]; then changed=true; fi
           echo "changed=$changed" >> "$GITHUB_OUTPUT"
       - name: Sign and verify
         if: steps.build.outputs.changed == 'true'
@@ -123,9 +154,16 @@ jobs:
               rm "out/$name.needs-signing"
             fi
           done
+          # The new base / update files made by publish_all_deltas.py (the old ones keep their old .sig).
+          while read -r file; do
+            if [ -n "$file" ]; then openssl dgst -sha256 -sign "$RUNNER_TEMP/sig-key.pem" -out "out/$file.sig" "out/$file"; fi
+          done < work/needs-signing.txt
           rm -f "$RUNNER_TEMP/sig-key.pem"
-          for name in signatures signatures-all; do
-            openssl dgst -sha256 -verify .github/signatures-public.pem -signature "out/$name.bin.sig" "out/$name.bin"
+          # Verify every file that gets published.
+          for file in out/signatures.bin out/signatures-all.bin out/signatures-all-base.bin out/signatures-all-delta-*.bin; do
+            if [ -f "$file" ]; then
+              openssl dgst -sha256 -verify .github/signatures-public.pem -signature "$file.sig" "$file"
+            fi
           done
       - name: Publish to the signatures branch
         if: steps.build.outputs.changed == 'true'
@@ -140,9 +178,10 @@ jobs:
             echo ""
             echo "- \`signatures.bin\`: SHA-256 hashes of known Android malware (APK/DEX). Used by the quick malware check."
             echo "- \`signatures-all.bin\`: SHA-256 hashes of known malware of every file type. Used by the deep scan."
-            echo "- \`*.bin.sig\`: ECDSA P-256 / SHA-256 signatures (DER) over each list."
+            echo "- \`signatures-all-base.bin\` and \`signatures-all-delta-NN.bin\`: the same deep-scan list as a base (renewed about monthly) plus small update files with the new samples of the days since. The app downloads the base only when it changes."
+            echo "- \`*.bin.sig\`: ECDSA P-256 / SHA-256 signatures (DER) over each file."
             echo "- \`signatures-public.pem\`: the verification key (the app has its own built-in copy)."
-            echo "- \`info.json\`, \`info-all.json\`: build time, entry count, SHA-256."
+            echo "- \`info.json\`, \`info-all.json\`, \`info-all-base.json\`: build time, entry count, SHA-256 (the last one also the number and sizes of the update files)."
             echo ""
             echo "Source: MalwareBazaar (abuse.ch), CC0, accumulated daily. Format: tools/signatures/sigformat.py on main."
           } > out/README.md
@@ -153,4 +192,4 @@ jobs:
           git add -A
           git commit -q -m "Signatures $(date -u +%Y-%m-%d)"
           git push --force --quiet "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:signatures
-          cat info.json info-all.json
+          cat info.json info-all.json info-all-base.json

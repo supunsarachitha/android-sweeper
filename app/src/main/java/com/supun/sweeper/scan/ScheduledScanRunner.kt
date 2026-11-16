@@ -5,10 +5,8 @@ import com.supun.sweeper.BuildConfig
 import com.supun.sweeper.malware.DeepMatch
 import com.supun.sweeper.malware.FileHashCache
 import com.supun.sweeper.malware.InstallResult
-import com.supun.sweeper.malware.SignatureSource
 import com.supun.sweeper.malware.SignatureUpdater
 import com.supun.sweeper.net.SignatureDownloader
-import com.supun.sweeper.net.SignatureList
 import com.supun.sweeper.storage.AllFilesAccess
 import com.supun.sweeper.storage.MalwareChecker
 import com.supun.sweeper.storage.MalwareSignatures
@@ -57,7 +55,7 @@ class ScheduledScanRunner(context: Context) {
             val downloader = SignatureDownloader(BuildConfig.VERSION_NAME)
             updated = tryUpdate { SignatureUpdater(store, downloader).update() }
             if (stopped()) throw CancellationException("Stopped")
-            val allUpdated = tryUpdate { SignatureUpdater(allStore, SignatureSource { downloader.fetch(SignatureList.ALL) }).update() }
+            val allUpdated = tryUpdate { allStore.update(downloader) }
             allStore.unload() // the list can be big: do not keep it in memory
             updated = updated || allUpdated
             if (stopped()) throw CancellationException("Stopped")
@@ -114,7 +112,7 @@ class ScheduledScanRunner(context: Context) {
     /** True if the list was replaced by a newer one. Any failure counts as "not updated". */
     private fun tryUpdate(update: () -> InstallResult): Boolean =
         try {
-            update() is InstallResult.Updated
+            update() is InstallResult.Changed
         } catch (e: CancellationException) {
             throw e
         } catch (e: OutOfMemoryError) {

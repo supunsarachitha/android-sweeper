@@ -43,7 +43,7 @@ Every scan shows progress and can be cancelled.
 | Usage access (`PACKAGE_USAGE_STATS`) | Reads the size and cache of each app and the storage breakdown. You grant it in Android's Settings. |
 | See all apps (`QUERY_ALL_PACKAGES`) | Lists every installed app, not only the ones Android shows to all apps. |
 | All files access (`MANAGE_EXTERNAL_STORAGE`) | Finds files anywhere on shared storage and moves them into the trash. On Android 8-10 the normal storage permissions (read/write) are used instead. |
-| Internet (`INTERNET`) | Only to download the two signed malware lists (`signatures.bin`, `signatures-all.bin`) from one fixed GitHub address, over HTTPS. Nothing is uploaded. CI enforces this (see below). |
+| Internet (`INTERNET`) | Only to download the signed malware lists (`signatures.bin`, and the deep-scan base and update files `signatures-all-base.bin`, `signatures-all-delta-NN.bin`) from one fixed GitHub address, over HTTPS. Nothing is uploaded. CI enforces this (see below). |
 | Request delete packages (`REQUEST_DELETE_PACKAGES`) | Lets the Malware check open Android's own "Uninstall this app?" dialog. You still confirm every uninstall. |
 | Notifications (`POST_NOTIFICATIONS`, Android 13+) | Shows a short summary after each scheduled malware scan (counts only, no names). Asked when you turn the schedule on; the scan runs without it and shows its result on the Malware screen. |
 | Run at startup (`RECEIVE_BOOT_COMPLETED`) | Keeps the scheduled scan after the phone restarts; Android refuses a persisted job without it. The app does nothing else at startup. |
@@ -123,15 +123,21 @@ hash up in a second list, `signatures-all.bin`, which holds known malware of eve
 - **It is slow.** Every byte of every file is read once. On a phone with a lot of data this
   can take a long time; the screen shows the files and gigabytes checked so far and has a
   Cancel button. Needs All files access, like the other file tools.
-- **The second list** is bigger than the Android one (up to 256 MB allowed, against 64 MB),
-  is kept in its own folder (`signatures-all`), and is checked exactly like the first (see
-  below). It is downloaded only when you tap **Deep scan** and no list is stored or the stored
-  one is at least 7 days old, or when you tap **Update deep-scan list**. Apart from a
-  scheduled scan on Wi-Fi it is never downloaded in the background, and the quick scan never
-  uses it.
+- **The second list** is much bigger than the Android one (about 40 MB and growing), is kept
+  in its own folder (`signatures-all`), and is checked exactly like the first (see below).
+  To avoid downloading 40 MB again and again it is published as a *base list* (renewed about
+  once a month) plus small signed *update files* (`signatures-all-delta-01.bin` ...) with the
+  samples added since, a few dozen KB a day. Every time a deep scan starts (and when you tap
+  **Update deep-scan list**) the app first fetches the 71-byte signature file of the base;
+  the base itself is downloaded only when that changed, then it fetches only the update
+  files it does not have yet. Every file has its own signature and an update file only
+  counts if it belongs to the installed base, has the next number and is newer than the one
+  before; the first one that does not check out, and all after it, are ignored. A list from
+  app version 0.9.0 is used until the first base arrives. Apart from a scheduled scan on
+  Wi-Fi it is never downloaded in the background, and the quick scan never uses it.
 
-**Signature verification.** Both lists are checked the same way. `signatures.bin.sig` is an ECDSA P-256 / SHA-256 signature (and
-`signatures-all.bin.sig` for the second list). The
+**Signature verification.** Every file is checked the same way. `signatures.bin.sig` is an ECDSA P-256 / SHA-256 signature (and
+the same for each deep-scan base and update file). The
 app has the matching public key built in (`.github/signatures-public.pem`) and installs a list
 only if the signature is valid, the format is exactly right (strict parser) and the list is
 newer than the installed one (no rollback to an older list, no dates more than 2 days in the

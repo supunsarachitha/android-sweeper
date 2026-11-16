@@ -1,6 +1,8 @@
 package com.supun.sweeper
 
 import android.content.Context
+import com.supun.sweeper.malware.DeepListStore
+import com.supun.sweeper.malware.DeepListTestSource
 import com.supun.sweeper.malware.SignatureStore
 import com.supun.sweeper.malware.SignatureTestKit
 import com.supun.sweeper.malware.SignatureVerifier
@@ -58,14 +60,11 @@ object DemoHook {
         val digest = MessageDigest.getInstance("SHA-256")
         for (i in 1..400) entries.add(digest.digest("demo-deep-sample-$i".toByteArray()) to "Demo.Filler${i % 7} (pdf)")
         val (data, sig) = kit.signedFile(System.currentTimeMillis() / 1000, entries)
-        val store = SignatureStore(
-            File(context.filesDir, "signatures-all-demo"),
-            verifier = SignatureVerifier(kit.publicKeyBase64),
-            maxDataBytes = SignatureStore.MAX_ALL_DATA_BYTES,
-        )
+        val store = DeepListStore(File(context.filesDir, "signatures-all-demo"), verifier = SignatureVerifier(kit.publicKeyBase64))
         store.clear()
-        store.install(data, sig)
+        store.installBase(data, sig)
         MalwareSignatures.useAllStoreForTests(store)
+        MalwareSignatures.useDeepSourceForTests(DeepListTestSource(sig)) // a deep scan updates first: no network in the demo
     }
 
     /**
