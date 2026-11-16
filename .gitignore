@@ -13,4 +13,5 @@ captures/
 screenshots/
 out/
 app/src/test/resources/sample-signatures.bin
+app/src/test/resources/sample-delta.bin
 __pycache__/

@@ -122,7 +122,7 @@ internal fun DeepScanCard(
             }
             Spacer(Modifier.height(8.dp))
             Text(
-                "The list is one signed file from GitHub, downloaded only when you tap a button here. Nothing else is sent.",
+                "The list is signed and comes from GitHub when a deep scan starts, you tap a button here or a scheduled scan runs on Wi-Fi: a full list now and then, otherwise only small updates. Nothing else is sent.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

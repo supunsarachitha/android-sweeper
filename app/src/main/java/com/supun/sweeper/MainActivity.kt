@@ -12,6 +12,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
+import com.supun.sweeper.scan.ACTION_OPEN_MALWARE
+import com.supun.sweeper.scan.ScheduledScan
 import com.supun.sweeper.storage.FileCleaner
 import com.supun.sweeper.ui.AppsScreen
 import com.supun.sweeper.ui.DuplicatesScreen
@@ -47,7 +49,8 @@ class MainActivity : ComponentActivity() {
             "duplicates" -> Screen.Duplicates
             "junk" -> Screen.Junk
             "malware" -> Screen.Malware
-            else -> Screen.Home
+            // The scheduled scan's notification opens the Malware screen in every build type.
+            else -> if (intent.action == ACTION_OPEN_MALWARE) Screen.Malware else Screen.Home
         }
         val startTab: Int = when (if (BuildConfig.DEBUG) intent.getStringExtra("tab") else null) {
             "old" -> TAB_OLD
@@ -67,11 +70,18 @@ class MainActivity : ComponentActivity() {
         // "--es scroll deep" only scrolls the Malware screen to the deep-scan card.
         val demoDeep = BuildConfig.DEBUG && intent.getStringExtra("demo") == "deep"
         val scrollToDeep = BuildConfig.DEBUG && (demoDeep || intent.getStringExtra("scroll") == "deep")
+        // "--es demo schedule" shows the schedule card on Daily with a last run; "--es demo schedulerun" prepares a
+        // real scheduled run (demo list, no network) that the emulator script then forces.
+        val demoName = if (BuildConfig.DEBUG) intent.getStringExtra("demo") else null
+        if (BuildConfig.DEBUG && demoName == "schedule") DemoHook.installSchedule(applicationContext)
+        if (BuildConfig.DEBUG && demoName == "schedulerun") DemoHook.installScheduleRun(applicationContext, intent.getStringExtra("demohash"))
         if (BuildConfig.DEBUG && demoMalware) DemoHook.install(applicationContext, intent.getStringExtra("demohash"))
         if (BuildConfig.DEBUG && demoDeep) DemoHook.installDeep(applicationContext, intent.getStringExtra("demohash"))
-        // Trash items older than 7 days are deleted at app start.
+        // Trash items older than 7 days are deleted at app start. The scheduled scan's job is also put back
+        // if an update or a restart dropped it.
         lifecycleScope.launch(Dispatchers.IO) {
             try {
+                ScheduledScan.ensureScheduled(applicationContext)
                 FileCleaner(applicationContext).purgeExpired()
             } catch (e: CancellationException) {
                 throw e

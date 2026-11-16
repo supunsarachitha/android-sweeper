@@ -27,7 +27,8 @@ Requirements: Android 8.0 (API 26) or newer.
   - this app's own cache.
 - **Malware check:** compares your installed apps and the APK/DEX files on storage with a
   signed list of known Android malware, and (deep scan) every file on storage with a larger
-  list of known malware of all kinds. See below.
+  list of known malware of all kinds. See below. It can also run by itself on a schedule
+  (off, daily or weekly) while the phone charges; it never removes anything on its own.
 - **Trash:** everything removed from the lists above (except empty folders and the app's own
   cache) lands here. See below.
 
@@ -40,8 +41,11 @@ Every scan shows progress and can be cancelled.
 | Usage access (`PACKAGE_USAGE_STATS`) | Reads the size and cache of each app and the storage breakdown. You grant it in Android's Settings. |
 | See all apps (`QUERY_ALL_PACKAGES`) | Lists every installed app, not only the ones Android shows to all apps. |
 | All files access (`MANAGE_EXTERNAL_STORAGE`) | Finds files anywhere on shared storage and moves them into the trash. On Android 8-10 the normal storage permissions (read/write) are used instead. |
-| Internet (`INTERNET`) | Only to download the two signed malware lists (`signatures.bin`, `signatures-all.bin`) from one fixed GitHub address, over HTTPS. Nothing is uploaded. CI enforces this (see below). |
+| Internet (`INTERNET`) | Only to download the signed malware lists (`signatures.bin`, and the deep-scan base and update files `signatures-all-base.bin`, `signatures-all-delta-NN.bin`) from one fixed GitHub address, over HTTPS. Nothing is uploaded. CI enforces this (see below). |
 | Request delete packages (`REQUEST_DELETE_PACKAGES`) | Lets the Malware check open Android's own "Uninstall this app?" dialog. You still confirm every uninstall. |
+| Notifications (`POST_NOTIFICATIONS`, Android 13+) | Shows a short summary after each scheduled malware scan (counts only, no names). Asked when you turn the schedule on; the scan runs without it and shows its result on the Malware screen. |
+| Run at startup (`RECEIVE_BOOT_COMPLETED`) | Keeps the scheduled scan after the phone restarts; Android refuses a persisted job without it. The app does nothing else at startup. |
+| Network state (`ACCESS_NETWORK_STATE`) | Lets the scheduled scan check whether the phone is on Wi-Fi before it updates the malware lists. |
 
 The app explains each permission before it sends you to Settings.
 
@@ -68,6 +72,22 @@ are left out. Each hash is looked up in a list of known Android malware samples.
 shows the malware family and offers **Uninstall** and **App info** for an app, or **Move to
 trash** (with the usual confirm dialog and Undo) for a file.
 
+**Scheduled scan.** On the Malware screen a card lets you pick Off (the default), Daily or
+Weekly. The scan runs only while the phone is charging, using Android's own job scheduler (no
+extra libraries), and it is kept after a restart. Each run does the quick scan (installed apps
+and APK/DEX files) and the deep scan of every file (files over 100 MB are skipped). On an
+unmetered Wi-Fi network it first updates both lists; otherwise, or if the update fails, it uses
+the lists already on the phone. If the all-types list was never downloaded and there is no
+Wi-Fi, the deep part is skipped and the summary says so. If All files access is off, the run
+only records and tells you that. After every run a notification gives a short summary (counts
+only, never file or app names); tapping it opens the Malware screen, where the findings appear
+in the usual lists with the usual **Uninstall** / **Move to trash** actions, confirm dialog and
+re-checks. **Nothing is ever removed automatically.** Android stops background jobs after about
+ten minutes, so the scheduled deep scan keeps an app-private cache of file hashes (a file is
+read again unless its size, modified time and change time are unchanged and the entry is under
+30 days old; every cached hash is still looked up in the current list) and continues next time
+("Deep scan not finished, continues next time"). The manual deep scan does not use this cache.
+
 **Its limits.** It finds exact copies of samples that are on the list. New, rebuilt or modified
 malware has a different hash and will not be found, and a clean result does not prove an app is
 safe. Treat it as an extra check: Google Play Protect remains your main protection.
@@ -79,7 +99,8 @@ publishes it, with `signatures.bin.sig`, on the `signatures` branch. The file fo
 described in `tools/signatures/sigformat.py`.
 
 **Updates.** The list is downloaded only when you tap **Update signatures**, or when you open
-the Malware screen and the installed list is at least 7 days old. There is no background work.
+the Malware screen and the installed list is at least 7 days old. The only background work is the
+optional scheduled scan (above), which updates both lists when it runs on an unmetered Wi-Fi network.
 The screen warns when the list is more than 14 days old. A phone with no list yet downloads
 nothing until you tap the button.
 
@@ -100,14 +121,21 @@ hash up in a second list, `signatures-all.bin`, which holds known malware of eve
 - **It is slow.** Every byte of every file is read once. On a phone with a lot of data this
   can take a long time; the screen shows the files and gigabytes checked so far and has a
   Cancel button. Needs All files access, like the other file tools.
-- **The second list** is bigger than the Android one (up to 256 MB allowed, against 64 MB),
-  is kept in its own folder (`signatures-all`), and is checked exactly like the first (see
-  below). It is downloaded only when you tap **Deep scan** and no list is stored or the stored
-  one is at least 7 days old, or when you tap **Update deep-scan list**. It is never
-  downloaded in the background, and the quick scan never uses it.
+- **The second list** is much bigger than the Android one (about 40 MB and growing), is kept
+  in its own folder (`signatures-all`), and is checked exactly like the first (see below).
+  To avoid downloading 40 MB again and again it is published as a *base list* (renewed about
+  once a month) plus small signed *update files* (`signatures-all-delta-01.bin` ...) with the
+  samples added since, a few dozen KB a day. Every time a deep scan starts (and when you tap
+  **Update deep-scan list**) the app first fetches the 71-byte signature file of the base;
+  the base itself is downloaded only when that changed, then it fetches only the update
+  files it does not have yet. Every file has its own signature and an update file only
+  counts if it belongs to the installed base, has the next number and is newer than the one
+  before; the first one that does not check out, and all after it, are ignored. A list from
+  app version 0.9.0 is used until the first base arrives. Apart from a scheduled scan on
+  Wi-Fi it is never downloaded in the background, and the quick scan never uses it.
 
-**Signature verification.** Both lists are checked the same way. `signatures.bin.sig` is an ECDSA P-256 / SHA-256 signature (and
-`signatures-all.bin.sig` for the second list). The
+**Signature verification.** Every file is checked the same way. `signatures.bin.sig` is an ECDSA P-256 / SHA-256 signature (and
+the same for each deep-scan base and update file). The
 app has the matching public key built in (`.github/signatures-public.pem`) and installs a list
 only if the signature is valid, the format is exactly right (strict parser) and the list is
 newer than the installed one (no rollback to an older list, no dates more than 2 days in the

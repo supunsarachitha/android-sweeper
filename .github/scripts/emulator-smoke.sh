@@ -225,5 +225,68 @@ shot_when no deep-scan-match-light.png "Demo.Trojan" 240 --es open malware --es 
 shot_when yes deep-scan-dark.png "Demo.Trojan" 240 --es open malware --es demo deep --es demohash "$DEEP_HASH"
 adb shell "rm -f $DEEP_FILE; rmdir $DEEP_DIR" || true
 
+# --- Phase 9: scheduled scan ------------------------------------------------------------------
+# "demo schedule" (debug builds only) turns the schedule on (Daily) and stores a last run of "nothing found";
+# nothing is scanned. "demo schedulerun" installs a demo list that contains the hash of the file made below, turns
+# the schedule on and forbids downloads; the script then forces the job like the system would while charging.
+SCHED_FILE=/sdcard/Download/sweeper-scheduled-demo.apk
+SCHED_JOB=29001
+cleanup_files() {
+  adb shell "rm -f $BIG $OLD $APKCOPY $TRASH/$TRASHED $TRASH/index.tsv $TRASH/.nomedia; rmdir $TRASH" || true
+  adb shell "rm -f $DUP_BIG_A $DUP_BIG_B $DUP_SMALL_A $DUP_SMALL_B" || true
+  adb shell "rm -f $JUNK_TMP $JUNK_PART $JUNK_DL $JUNK_THUMB; rm -f '$JUNK_OFFICE'" || true
+  adb shell "rmdir $JUNK_EMPTY/a/b $JUNK_EMPTY/a $JUNK_EMPTY; rmdir /sdcard/DCIM/.thumbnails" || true
+  adb shell "rm -f $MAL_FILE $UI_DUMP" || true
+  adb shell "rm -f $DEEP_FILE; rmdir $DEEP_DIR" || true
+  adb shell "rm -f $SCHED_FILE" || true
+  adb shell "cmd jobscheduler cancel $PKG $SCHED_JOB" || true
+}
+adb shell appops set --uid "$PKG" MANAGE_EXTERNAL_STORAGE allow
+adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS
+
+shot_when no schedule-light.png "Last run" 90 --es open malware --es demo schedule
+shot_when yes schedule-dark.png "Last run" 90 --es open malware --es demo schedule
+
+adb shell "dd if=/dev/urandom of=$SCHED_FILE bs=1024 count=64"
+SCHED_HASH=$(adb shell "sha256sum $SCHED_FILE" | tr -d '\r' | cut -d' ' -f1)
+if [ "${#SCHED_HASH}" -ne 64 ]; then
+  echo "Could not hash $SCHED_FILE (got '$SCHED_HASH')" >&2
+  exit 1
+fi
+adb shell cmd uimode night no
+adb shell am force-stop "$PKG"
+adb shell am start -W -n "$PKG/.MainActivity" --es open malware --es demo schedulerun --es demohash "$SCHED_HASH"
+sleep 6
+adb shell "cmd jobscheduler run -f $PKG $SCHED_JOB"
+waited=0
+until adb shell dumpsys notification --noredact | grep -q "Scheduled scan: 1 item found"; do
+  if [ "$waited" -ge 240 ]; then
+    echo "The scheduled run did not post its notification" >&2
+    adb shell dumpsys notification --noredact | grep -i -A3 "$PKG" >&2 || true
+    exit 1
+  fi
+  sleep 3
+  waited=$((waited + 3))
+done
+echo "Scheduled run posted its notification after ${waited}s"
+sleep 4
+adb exec-out screencap -p > screenshots/scheduled-run-light.png
+# Scroll down to the finding the run left (same labelled card and actions as after a manual scan).
+SIZE=$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -1)
+W=${SIZE%x*}
+H=${SIZE#*x}
+adb shell input swipe $((W / 2)) $((H * 3 / 4)) $((W / 2)) $((H / 3)) 400
+sleep 2
+adb exec-out screencap -p > screenshots/scheduled-findings-light.png
+adb shell cmd statusbar expand-notifications
+sleep 3
+adb exec-out screencap -p > screenshots/scheduled-notification-light.png
+adb shell cmd statusbar collapse
+sleep 1
+adb shell dumpsys notification --noredact | grep -A12 "$PKG" | grep -E "android.title|android.text" || true
+adb shell "cmd jobscheduler cancel $PKG $SCHED_JOB" || true
+adb shell "rm -f $SCHED_FILE" || true
+adb shell pm revoke "$PKG" android.permission.POST_NOTIFICATIONS || true
+
 adb shell cmd uimode night no
 adb shell appops set --uid "$PKG" MANAGE_EXTERNAL_STORAGE default
