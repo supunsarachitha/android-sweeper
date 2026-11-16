@@ -41,6 +41,8 @@ jobs:
           python3 -I tools/signatures/build_signatures.py \
             app/src/test/resources/sample-signatures.bin "$RUNNER_TEMP/fixture-info.json" \
             --csv tools/signatures/fixture.csv
+      - name: Check the signature tools (update files and publishing rules)
+        run: python3 -I tools/signatures/test_publish.py
       - name: Decode signing key
         env:
           KEYSTORE_B64: ${{ secrets.SWEEPER_KEYSTORE_B64 }}
