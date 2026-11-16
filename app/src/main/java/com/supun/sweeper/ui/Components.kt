@@ -1,12 +1,13 @@
 package com.supun.sweeper.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -31,9 +33,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -58,9 +66,23 @@ fun SweeperTopBar(
     title: String,
     onBack: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
+    logo: Int? = null,
 ) {
     TopAppBar(
-        title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (logo != null) {
+                    Icon(
+                        painterResource(logo),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(28.dp),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                }
+                Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        },
         navigationIcon = {
             if (onBack != null) {
                 IconButton(onClick = onBack) {
@@ -233,16 +255,61 @@ fun EmptyState(icon: Int, title: String, modifier: Modifier = Modifier, body: St
     }
 }
 
-/** Filter chips in a row that wraps onto a second line on a narrow screen, so none is cut off. */
-@OptIn(ExperimentalLayoutApi::class)
+/** Filter chips in one row that scrolls sideways on a narrow screen, so no chip drops onto a second line. */
 @Composable
-fun ChipFlow(content: @Composable () -> Unit) {
-    FlowRow(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+fun ChipScrollRow(content: @Composable RowScope.() -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        content()
+        content = content,
+    )
+}
+
+/**
+ * A row with a title and a chevron that shows or hides [content] below it. The whole row is the tap target;
+ * [tag] goes on it.
+ */
+@Composable
+fun ExpandableRow(title: String, tag: String, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    Column(modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { open = !open }
+                .testTag(tag)
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                painterResource(if (open) R.drawable.ic_expand_less else R.drawable.ic_expand_more),
+                contentDescription = if (open) "Hide" else "Show",
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        }
+        if (open) content()
     }
+}
+
+/**
+ * Colours for a card that reports a finding. Light: the error container. Dark: the error container mixed into the
+ * card surface, so the card reads as a warning without a saturated red block.
+ */
+@Composable
+internal fun findingCardColors(): CardColors {
+    val scheme = MaterialTheme.colorScheme
+    val container = if (isSystemInDarkTheme()) lerp(scheme.surfaceContainer, scheme.errorContainer, 0.4f) else scheme.errorContainer
+    return CardDefaults.cardColors(containerColor = container, contentColor = scheme.onErrorContainer)
 }
 
 /** A compact tonal card for hints and notices. With [onDismiss] it gets a close button. */

@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -94,8 +96,8 @@ fun TrashScreen(resumeCount: Int, onBack: () -> Unit) {
             if (list != null && list.isEmpty()) {
                 EmptyState(
                     icon = R.drawable.ic_trash,
-                    title = "The trash is empty",
-                    body = "Files you remove are kept here for 7 days.",
+                    title = "Trash is empty",
+                    body = "Files you remove stay here for 7 days.",
                     modifier = Modifier.testTag("trash_empty"),
                 )
             }
@@ -167,7 +169,7 @@ private fun TrashRow(item: TrashItem, folder: String, now: Long, onRestore: () -
         Modifier
             .fillMaxWidth()
             .testTag("trash_row_${item.name}")
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
@@ -188,10 +190,15 @@ private fun TrashRow(item: TrashItem, folder: String, now: Long, onRestore: () -
             Spacer(Modifier.width(12.dp))
             Text(nbBytes(item.size), style = MaterialTheme.typography.titleSmall)
         }
-        Spacer(Modifier.height(2.dp))
-        Row {
-            TextButton(onClick = onRestore, modifier = Modifier.testTag("restore_button_${item.name}")) { Text("Restore") }
-            TextButton(onClick = onDelete, modifier = Modifier.testTag("delete_button_${item.name}")) { Text("Delete now") }
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            FilledTonalButton(onClick = onRestore, modifier = Modifier.testTag("restore_button_${item.name}")) { Text("Restore") }
+            Spacer(Modifier.width(16.dp))
+            TextButton(
+                onClick = onDelete,
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                modifier = Modifier.testTag("delete_button_${item.name}"),
+            ) { Text("Delete now") }
         }
     }
 }

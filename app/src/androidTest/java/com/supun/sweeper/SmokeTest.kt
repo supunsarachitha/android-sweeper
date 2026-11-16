@@ -41,6 +41,8 @@ class SmokeTest {
         rule.onNodeWithText("Android Sweeper").assertIsDisplayed()
         rule.onNodeWithTag("storage_card").assertIsDisplayed()
         rule.onNodeWithText("Internal storage").assertIsDisplayed()
+        rule.waitUntil(10_000) { rule.onAllNodesWithTag("protection_line").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithTag("protection_line").assertIsDisplayed()
     }
 
     @Test fun appsScreenAsksForUsageAccessWhenRevoked() {

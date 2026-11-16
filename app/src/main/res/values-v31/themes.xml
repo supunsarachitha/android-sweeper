@@ -1,0 +1,7 @@
+<resources>
+    <!-- Android 12+ splash screen: the app icon on the brand teal. -->
+    <style name="Theme.Sweeper" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowSplashScreenBackground">#0F766E</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+    </style>
+</resources>
