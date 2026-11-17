@@ -21,6 +21,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Lets the Malware check open Android's own "Uninstall this app?" dialog (Intent.ACTION_DELETE). -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <!-- Lets the APK list hand a tapped .apk to Android's package installer (it asks the user to confirm). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Android 13+: lets the scheduled malware scan show its short summary notification. Asked for when the
          schedule is turned on; the scan runs without it and shows its result on the Malware screen. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -54,6 +56,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Gives the app the user picked in "Open with" read-only access to ONE tapped file. Not exported. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
         <!-- Runs the scheduled malware scan while the phone charges. Only the system can bind to it. -->
         <service
             android:name=".scan.ScheduledScanService"

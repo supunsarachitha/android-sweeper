@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider paths: shared storage only, so other apps can read a file the user taps to open.
+     The app re-checks every path (PathGuard) before it builds a link; trash and Android/data|obb are refused. -->
+<paths>
+    <external-path name="storage" path="." />
+</paths>

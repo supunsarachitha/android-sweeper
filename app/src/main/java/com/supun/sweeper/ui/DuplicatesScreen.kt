@@ -2,6 +2,7 @@ package com.supun.sweeper.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -13,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
@@ -38,18 +38,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.supun.sweeper.R
 import com.supun.sweeper.files.DuplicateGroup
 import com.supun.sweeper.files.DuplicateSelection
+import com.supun.sweeper.files.OpenRules
 import com.supun.sweeper.files.STAGE_FULL
 import com.supun.sweeper.files.STAGE_PREFIX
 import com.supun.sweeper.files.withoutFiles
 import com.supun.sweeper.storage.AllFilesAccess
 import com.supun.sweeper.storage.DuplicateStats
 import com.supun.sweeper.storage.FileCleaner
+import com.supun.sweeper.storage.FileOpener
 import com.supun.sweeper.util.formatBytes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -70,6 +71,11 @@ fun DuplicatesScreen(resumeCount: Int, demoKeepOldest: Boolean, onBack: () -> Un
     val rootPath = remember { cleaner.root.canonicalPath }
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
+    var installPath by remember { mutableStateOf<String?>(null) }
+
+    fun openFile(path: String) {
+        FileOpener.open(context, path).message?.let { msg -> scope.launch { snackbar.showSnackbar(msg) } }
+    }
 
     // Re-checked on every resume (back from Settings) and after the Android 8-10 permission dialog.
     var permissionTick by remember { mutableIntStateOf(0) }
@@ -239,6 +245,9 @@ fun DuplicatesScreen(resumeCount: Int, demoKeepOldest: Boolean, onBack: () -> Un
                                 selection = selection,
                                 rootPath = rootPath,
                                 onToggle = { path -> selection = selection.toggle(group, path) },
+                                onOpen = { path ->
+                                    if (OpenRules.isApk(path.substringAfterLast('/'))) installPath = path else openFile(path)
+                                },
                                 onKeepOldest = { selection = selection.keepOldest(group) },
                             )
                             Spacer(Modifier.height(12.dp))
@@ -247,6 +256,13 @@ fun DuplicatesScreen(resumeCount: Int, demoKeepOldest: Boolean, onBack: () -> Un
                 }
             }
         }
+    }
+
+    installPath?.let { path ->
+        InstallConfirmDialog(
+            onCancel = { installPath = null },
+            onInstall = { installPath = null; openFile(path) },
+        )
     }
 
     if (confirm) {
@@ -301,6 +317,7 @@ private fun GroupCard(
     selection: DuplicateSelection,
     rootPath: String,
     onToggle: (String) -> Unit,
+    onOpen: (String) -> Unit,
     onKeepOldest: () -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth().testTag("dup_group_$index"), colors = sweeperCardColors()) {
@@ -331,17 +348,19 @@ private fun GroupCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("dup_row_${file.name}_$i")
-                        .toggleable(
-                            value = checked,
-                            enabled = enabled,
-                            role = Role.Checkbox,
-                            onValueChange = { onToggle(file.path) },
-                        )
-                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                        // A non-selectable (kept) copy can still be opened.
+                        .clickable(onClickLabel = "Open file") { onOpen(file.path) }
+                        .padding(start = 4.dp, end = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Checkbox(checked = checked, onCheckedChange = null, enabled = enabled)
-                    Spacer(Modifier.width(12.dp))
+                    // Only the checkbox selects; tapping the rest of the row opens the file.
+                    Checkbox(
+                        checked = checked,
+                        onCheckedChange = { onToggle(file.path) },
+                        enabled = enabled,
+                        modifier = Modifier.testTag("dup_check_${file.name}_$i"),
+                    )
+                    Spacer(Modifier.width(4.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
                             file.name,

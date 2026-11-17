@@ -3,10 +3,15 @@ package com.supun.sweeper
 import android.os.ParcelFileDescriptor
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import android.content.Intent
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
@@ -61,7 +66,10 @@ class DuplicatesTest {
         rule.waitForIdle()
     }
 
+    private val capture = OpenCapture()
+
     @After fun cleanUp() {
+        capture.stop()
         shell("rm -f $aPath $bPath $cPath")
         try {
             Trash(storageRoot()).emptyAll()
@@ -97,5 +105,34 @@ class DuplicatesTest {
         val gone = if (aLeft) bName else aName
         assertTrue("the removed copy must be in the trash: $trashed", gone in trashed)
         assertEquals(1, trashed.count { it == aName || it == bName })
+    }
+
+    @Test fun rowTapOpensAndOnlyTheCheckboxSelectsKeepOneStillHolds() {
+        capture.start()
+        rule.onNodeWithTag("home_list").performScrollToNode(hasTestTag("duplicates_card"))
+        rule.onNodeWithTag("duplicates_card").performClick()
+        rule.waitUntil(120_000) {
+            rule.onAllNodesWithTag("keep_oldest_all_button").fetchSemanticsNodes().isNotEmpty()
+        }
+        rule.waitUntil(30_000) { rowCount(aName) == 1 && rowCount(bName) == 1 }
+        rule.onNodeWithTag("selection_summary").assertTextContains("0 selected", substring = true)
+
+        // Tapping a row opens it and selects nothing.
+        rowsWithPrefix("dup_row_${aName}_").onFirst().performClick()
+        rule.waitUntil(10_000) { capture.intents.size == 1 }
+        rule.onNodeWithTag("selection_summary").assertTextContains("0 selected", substring = true)
+        assertEquals(Intent.ACTION_VIEW, capture.viewIntent(0).action)
+
+        // The checkbox selects the copy of a; its twin in b becomes the one that has to stay.
+        rowsWithPrefix("dup_check_${aName}_").onFirst().performClick()
+        rule.onNodeWithTag("selection_summary").assertTextContains("1 selected", substring = true)
+        assertEquals(1, capture.intents.size)
+        rowsWithPrefix("dup_check_${bName}_").onFirst().assertIsNotEnabled()
+        rowsWithPrefix("dup_check_${aName}_").onFirst().assertIsEnabled()
+
+        // The kept copy can still be opened, and tapping it selects nothing.
+        rowsWithPrefix("dup_row_${bName}_").onFirst().performClick()
+        rule.waitUntil(10_000) { capture.intents.size == 2 }
+        rule.onNodeWithTag("selection_summary").assertTextContains("1 selected", substring = true)
     }
 }

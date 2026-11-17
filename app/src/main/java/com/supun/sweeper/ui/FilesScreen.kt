@@ -3,6 +3,7 @@ package com.supun.sweeper.ui
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -49,16 +49,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.supun.sweeper.R
 import com.supun.sweeper.files.FoundFile
 import com.supun.sweeper.files.MB
+import com.supun.sweeper.files.OpenRules
 import com.supun.sweeper.files.ScanCandidates
 import com.supun.sweeper.storage.AllFilesAccess
 import com.supun.sweeper.storage.ApkInfo
 import com.supun.sweeper.storage.FileCleaner
+import com.supun.sweeper.storage.FileOpener
 import com.supun.sweeper.util.formatBytes
 import java.io.File
 import kotlinx.coroutines.CancellationException
@@ -109,6 +110,12 @@ fun FilesScreen(resumeCount: Int, initialTab: Int, onBack: () -> Unit) {
     var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
     var confirm by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
+    var installTarget by remember { mutableStateOf<FoundFile?>(null) }
+
+    fun openFile(path: String) {
+        val result = FileOpener.open(context, path)
+        result.message?.let { msg -> scope.launch { snackbar.showSnackbar(msg) } }
+    }
 
     // One walk per visit (and one more after an undo); thresholds are applied to its result.
     LaunchedEffect(granted, scanKey) {
@@ -271,6 +278,10 @@ fun FilesScreen(resumeCount: Int, initialTab: Int, onBack: () -> Unit) {
                                 checked = file.path in selected,
                                 cleaner = cleaner,
                                 showApkInfo = tab == TAB_APK,
+                                onOpen = {
+                                    // APK files get a confirm step first; the installer itself asks again.
+                                    if (OpenRules.isApk(file.name)) installTarget = file else openFile(file.path)
+                                },
                                 onToggle = {
                                     selected = if (file.path in selected) selected - file.path else selected + file.path
                                 },
@@ -280,6 +291,13 @@ fun FilesScreen(resumeCount: Int, initialTab: Int, onBack: () -> Unit) {
                 }
             }
         }
+    }
+
+    installTarget?.let { target ->
+        InstallConfirmDialog(
+            onCancel = { installTarget = null },
+            onInstall = { installTarget = null; openFile(target.path) },
+        )
     }
 
     if (confirm) {
@@ -352,6 +370,7 @@ private fun FileRow(
     checked: Boolean,
     cleaner: FileCleaner,
     showApkInfo: Boolean,
+    onOpen: () -> Unit,
     onToggle: () -> Unit,
 ) {
     val apk by produceState<ApkInfo?>(null, file.path, showApkInfo) {
@@ -361,11 +380,16 @@ private fun FileRow(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("file_row_${file.name}")
-            .toggleable(value = checked, role = Role.Checkbox, onValueChange = { onToggle() })
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+            .clickable(onClickLabel = "Open file", onClick = onOpen)
+            .padding(horizontal = 4.dp, vertical = 0.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Checkbox(checked = checked, onCheckedChange = null)
+        // Only the checkbox selects; tapping the rest of the row opens the file.
+        Checkbox(
+            checked = checked,
+            onCheckedChange = { onToggle() },
+            modifier = Modifier.testTag("file_check_${file.name}"),
+        )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(file.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -406,7 +430,7 @@ private fun FileRow(
             )
         }
         Spacer(Modifier.width(12.dp))
-        Column(horizontalAlignment = Alignment.End) {
+        Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(end = 12.dp)) {
             Text(nbBytes(file.size), style = MaterialTheme.typography.titleSmall)
             Text(
                 formatDate(file.lastModified),
