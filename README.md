@@ -45,6 +45,7 @@ Every scan shows progress and can be cancelled.
 | All files access (`MANAGE_EXTERNAL_STORAGE`) | Finds files anywhere on shared storage and moves them into the trash. On Android 8-10 the normal storage permissions (read/write) are used instead. |
 | Internet (`INTERNET`) | Only to download the signed malware lists (`signatures.bin`, and the deep-scan base and update files `signatures-all-base.bin`, `signatures-all-delta-NN.bin`) from one fixed GitHub address, over HTTPS. Nothing is uploaded. CI enforces this (see below). |
 | Request delete packages (`REQUEST_DELETE_PACKAGES`) | Lets the Malware check open Android's own "Uninstall this app?" dialog. You still confirm every uninstall. |
+| Request install packages (`REQUEST_INSTALL_PACKAGES`) | Lets a tapped APK file in the APK list open Android's package installer. The app asks "Install this app?" first and the installer asks again. |
 | Notifications (`POST_NOTIFICATIONS`, Android 13+) | Shows a short summary after each scheduled malware scan (counts only, no names). Asked when you turn the schedule on; the scan runs without it and shows its result on the Malware screen. |
 | Run at startup (`RECEIVE_BOOT_COMPLETED`) | Keeps the scheduled scan after the phone restarts; Android refuses a persisted job without it. The app does nothing else at startup. |
 | Network state (`ACCESS_NETWORK_STATE`) | Lets the scheduled scan check whether the phone is on Wi-Fi before it updates the malware lists. |

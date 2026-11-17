@@ -24,6 +24,8 @@ ALLOWED_PERMISSIONS=(
   android.permission.INTERNET
   # Needed for the Uninstall action of the Malware check (Intent.ACTION_DELETE opens Android's own confirm dialog).
   android.permission.REQUEST_DELETE_PACKAGES
+  # Open APK files the user taps in the APK list (Android's installer asks for confirmation).
+  android.permission.REQUEST_INSTALL_PACKAGES
   # Android 13+: shows the short summary notification after each scheduled malware scan.
   android.permission.POST_NOTIFICATIONS
   # Keeps the scheduled scan after a restart: JobScheduler refuses persisted jobs without it.
