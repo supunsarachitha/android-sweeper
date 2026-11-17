@@ -30,7 +30,7 @@ object OpenRules {
 
     /**
      * MIME type for [name]. APK is fixed; otherwise [systemLookup] (Android's MimeTypeMap) is asked first,
-     * then a small built-in table, and last "*/*".
+     * then a small built-in table, and last the catch-all type (UNKNOWN_MIME).
      */
     fun mimeType(name: String, systemLookup: (String) -> String? = { null }): String {
         val ext = extensionOf(name)
