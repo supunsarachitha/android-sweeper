@@ -248,7 +248,7 @@ private fun PreviewBody(content: PreviewContent?, path: String) {
                 bitmap = content.page.asImageBitmap(),
                 contentDescription = "First page of ${File(path).name}",
                 contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp).testTag("preview_pdf"),
+                modifier = Modifier.fillMaxWidth().heightIn(max = 210.dp).testTag("preview_pdf"),
             )
             Text(
                 if (content.pageCount == 1) "1 page, first page shown" else "${content.pageCount} pages, first page shown",
