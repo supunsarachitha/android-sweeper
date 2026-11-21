@@ -224,7 +224,7 @@ private fun DetailLine(label: String, value: String) {
 
 @Composable
 private fun PreviewBody(content: PreviewContent?, path: String) {
-    val box = Modifier.fillMaxWidth().testTag("preview_body")
+    val box = Modifier.fillMaxWidth()
     when (content) {
         null -> Box(box.height(160.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         is PreviewContent.Image -> Image(
