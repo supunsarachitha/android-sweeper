@@ -325,6 +325,80 @@ adb shell pm revoke "$PKG" android.permission.POST_NOTIFICATIONS || true
 adb shell cmd uimode night no
 adb shell appops set --uid "$PKG" MANAGE_EXTERNAL_STORAGE default
 
+# --- Phase 11: file preview -----------------------------------------------------------------
+# One file of each kind, opened straight on its preview with the debug-only "--es preview <path>" extra.
+# The picture and the PDF are made on the runner and pushed; the text file and the zip with the shell.
+PV_DIR=/sdcard/Download
+PV_IMG=$PV_DIR/sweeper-preview-photo.png
+PV_TXT=$PV_DIR/sweeper-preview-notes.txt
+PV_PDF=$PV_DIR/sweeper-preview-report.pdf
+PV_ZIP=$PV_DIR/sweeper-preview-archive.zip
+eval "$(declare -f cleanup_files | sed '1s/.*/previous_cleanup_files ()/')"
+cleanup_files() {
+  previous_cleanup_files
+  adb shell "rm -f $PV_IMG $PV_TXT $PV_PDF $PV_ZIP" || true
+}
+PV_LOCAL=$(mktemp -d)
+cat > "$PV_LOCAL/make.py" <<'PYEOF'
+import struct, sys, zlib
+out = sys.argv[1]
+w, h = 1200, 800
+rows = bytearray()
+for y in range(h):
+    rows.append(0)
+    for x in range(w):
+        r = 40 + 180 * x // w
+        g = 90 + 120 * y // h
+        b = 200 - 120 * x // w
+        if (x // 100 + y // 100) % 2 == 0:
+            r, g, b = min(r + 25, 255), min(g + 25, 255), min(b + 25, 255)
+        rows += bytes((r, g, b))
+def chunk(kind, data):
+    body = kind + data
+    return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) \
+    + chunk(b"IDAT", zlib.compress(bytes(rows), 9)) + chunk(b"IEND", b"")
+open(out + "/photo.png", "wb").write(png)
+stream = b"BT /F1 28 Tf 72 700 Td (Quarterly report) Tj 0 -40 Td /F1 16 Tf (Preview of the first page) Tj ET"
+objs = [
+    b"<< /Type /Catalog /Pages 2 0 R >>",
+    b"<< /Type /Pages /Kids [3 0 R 6 0 R] /Count 2 >>",
+    b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+    b"<< /Length %d >>\nstream\n" % len(stream) + stream + b"\nendstream",
+    b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>",
+]
+pdf = bytearray(b"%PDF-1.4\n")
+offsets = []
+for i, o in enumerate(objs, 1):
+    offsets.append(len(pdf))
+    pdf += b"%d 0 obj\n" % i + o + b"\nendobj\n"
+xref = len(pdf)
+pdf += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objs) + 1)
+for off in offsets:
+    pdf += b"%010d 00000 n \n" % off
+pdf += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objs) + 1, xref)
+open(out + "/report.pdf", "wb").write(pdf)
+PYEOF
+python3 "$PV_LOCAL/make.py" "$PV_LOCAL"
+adb push "$PV_LOCAL/photo.png" $PV_IMG
+adb push "$PV_LOCAL/report.pdf" $PV_PDF
+adb shell "printf 'Shopping list\n- bread\n- milk\n- coffee\n\n{\"note\": \"shown as plain text, never run\"}\n' > $PV_TXT"
+adb shell "dd if=/dev/urandom of=$PV_ZIP bs=1024 count=300"
+adb shell appops set --uid "$PKG" MANAGE_EXTERNAL_STORAGE allow
+
+for night in no yes; do
+  mode=light
+  [ "$night" = yes ] && mode=dark
+  SHOT_WAIT=8 shot "$night" "preview-image-$mode.png" --es open files --es preview $PV_IMG
+  SHOT_WAIT=8 shot "$night" "preview-text-$mode.png" --es open files --es preview $PV_TXT
+  SHOT_WAIT=8 shot "$night" "preview-pdf-$mode.png" --es open files --es preview $PV_PDF
+  SHOT_WAIT=8 shot "$night" "preview-apk-$mode.png" --es open files --es preview $APKCOPY
+  SHOT_WAIT=8 shot "$night" "preview-details-$mode.png" --es open files --es preview $PV_ZIP
+done
+adb shell cmd uimode night no
+adb shell appops set --uid "$PKG" MANAGE_EXTERNAL_STORAGE default
+
 # --- Launcher icon ------------------------------------------------------------------------------
 # HOME, then the app drawer (swipe up from the bottom), scrolled until the app's label is on screen.
 # Not fatal: launchers differ, and the pictures only show the icon.

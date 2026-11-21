@@ -12,6 +12,7 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
@@ -107,7 +108,7 @@ class DuplicatesTest {
         assertEquals(1, trashed.count { it == aName || it == bName })
     }
 
-    @Test fun rowTapOpensAndOnlyTheCheckboxSelectsKeepOneStillHolds() {
+    @Test fun rowTapOpensThePreviewAndKeepOneStillHolds() {
         capture.start()
         rule.onNodeWithTag("home_list").performScrollToNode(hasTestTag("duplicates_card"))
         rule.onNodeWithTag("duplicates_card").performClick()
@@ -117,22 +118,32 @@ class DuplicatesTest {
         rule.waitUntil(30_000) { rowCount(aName) == 1 && rowCount(bName) == 1 }
         rule.onNodeWithTag("selection_summary").assertTextContains("0 selected", substring = true)
 
-        // Tapping a row opens it and selects nothing.
+        // Tapping a row opens the preview in the app and selects nothing.
         rowsWithPrefix("dup_row_${aName}_").onFirst().performClick()
-        rule.waitUntil(10_000) { capture.intents.size == 1 }
-        rule.onNodeWithTag("selection_summary").assertTextContains("0 selected", substring = true)
-        assertEquals(Intent.ACTION_VIEW, capture.viewIntent(0).action)
-
-        // The checkbox selects the copy of a; its twin in b becomes the one that has to stay.
-        rowsWithPrefix("dup_check_${aName}_").onFirst().performClick()
+        rule.waitUntil(10_000) { rule.onAllNodesWithTag("preview_screen").fetchSemanticsNodes().isNotEmpty() }
+        assertEquals(0, capture.intents.size)
+        rule.onNodeWithTag("preview_select_button").assertTextContains("Select")
+        // Select in the preview selects this copy, like its checkbox would.
+        rule.onNodeWithTag("preview_select_button").performClick()
+        rule.onNodeWithTag("preview_select_button").assertTextContains("Deselect")
+        rule.onNodeWithContentDescription("Back").performClick()
+        rule.waitUntil(10_000) { rule.onAllNodesWithTag("preview_screen").fetchSemanticsNodes().isEmpty() }
         rule.onNodeWithTag("selection_summary").assertTextContains("1 selected", substring = true)
-        assertEquals(1, capture.intents.size)
-        rowsWithPrefix("dup_check_${bName}_").onFirst().assertIsNotEnabled()
         rowsWithPrefix("dup_check_${aName}_").onFirst().assertIsEnabled()
+        rowsWithPrefix("dup_check_${bName}_").onFirst().assertIsNotEnabled()
 
-        // The kept copy can still be opened, and tapping it selects nothing.
+        // The twin that has to stay can be previewed, but has no Select and no Move to trash.
         rowsWithPrefix("dup_row_${bName}_").onFirst().performClick()
-        rule.waitUntil(10_000) { capture.intents.size == 2 }
+        rule.waitUntil(10_000) { rule.onAllNodesWithTag("preview_screen").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithTag("preview_keep_note").assertIsDisplayed()
+        assertTrue(rule.onAllNodesWithTag("preview_select_button").fetchSemanticsNodes().isEmpty())
+        assertTrue(rule.onAllNodesWithTag("preview_trash_button").fetchSemanticsNodes().isEmpty())
+        // Open with... still works for it, and changes no selection.
+        rule.onNodeWithTag("preview_open_button").performClick()
+        rule.waitUntil(10_000) { capture.intents.size == 1 }
+        assertEquals(Intent.ACTION_VIEW, capture.viewIntent(0).action)
+        rule.onNodeWithContentDescription("Back").performClick()
+        rule.waitUntil(10_000) { rule.onAllNodesWithTag("preview_screen").fetchSemanticsNodes().isEmpty() }
         rule.onNodeWithTag("selection_summary").assertTextContains("1 selected", substring = true)
     }
 }

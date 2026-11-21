@@ -11,6 +11,9 @@ sealed interface Screen {
     data object Duplicates : Screen
     data object Junk : Screen
     data object Malware : Screen
+
+    /** Full-screen preview of one file; [origin] (Files or Duplicates) stays composed underneath. */
+    data class Preview(val origin: Screen, val path: String) : Screen
 }
 
 /** Lets the current screen survive rotation and process death. */
@@ -24,6 +27,11 @@ val ScreenSaver: Saver<Screen, String> = Saver(
             Screen.Duplicates -> "duplicates"
             Screen.Junk -> "junk"
             Screen.Malware -> "malware"
+            // A preview needs its list screen's callbacks, so after a restart only the list comes back.
+            is Screen.Preview -> when (it.origin) {
+                Screen.Duplicates -> "duplicates"
+                else -> "files"
+            }
         }
     },
     restore = {
