@@ -109,14 +109,49 @@ class FilesTest {
         waitForTag("file_row_$testFile")
     }
 
-    @Test fun rowTapOpensTheFileAndOnlyTheCheckboxSelects() {
+    @Test fun rowTapOpensThePreviewAndDoesNotSelect() {
         capture.start()
         openFilesScreen()
         rule.onNodeWithTag("selection_summary").assertTextContains("0 selected", substring = true)
 
         rule.onNodeWithTag("file_row_$testFile").performClick()
-        rule.waitUntil(10_000) { capture.intents.size == 1 }
+        waitForTag("preview_screen")
+        assertEquals("a row tap opens the preview, not another app", 0, capture.intents.size)
+        rule.onNodeWithTag("preview_details").assertIsDisplayed()
+        rule.onNodeWithTag("preview_select_button").assertTextContains("Select")
+
+        // Select in the preview is the same selection as the list's checkbox.
+        rule.onNodeWithTag("preview_select_button").performClick()
+        rule.onNodeWithTag("preview_select_button").assertTextContains("Deselect")
+        rule.onNodeWithContentDescription("Back").performClick()
+        waitForNoTag("preview_screen")
+        rule.onNodeWithTag("selection_summary").assertTextContains("1 selected", substring = true)
+
+        // Opening it again shows it as selected; Deselect there clears the checkbox.
+        rule.onNodeWithTag("file_row_$testFile").performClick()
+        waitForTag("preview_screen")
+        rule.onNodeWithTag("preview_select_button").assertTextContains("Deselect")
+        rule.onNodeWithTag("preview_select_button").performClick()
+        rule.onNodeWithContentDescription("Back").performClick()
+        waitForNoTag("preview_screen")
         rule.onNodeWithTag("selection_summary").assertTextContains("0 selected", substring = true)
+
+        // The checkbox alone selects and does not open anything.
+        rule.onNodeWithTag("file_check_$testFile").performClick()
+        rule.onNodeWithTag("selection_summary").assertTextContains("1 selected", substring = true)
+        assertEquals(0, capture.intents.size)
+        assertTrue(rule.onAllNodesWithTag("preview_screen").fetchSemanticsNodes().isEmpty())
+        rule.onNodeWithTag("file_check_$testFile").performClick()
+        rule.onNodeWithTag("selection_summary").assertTextContains("0 selected", substring = true)
+    }
+
+    @Test fun openWithInThePreviewStillFiresTheChooser() {
+        capture.start()
+        openFilesScreen()
+        rule.onNodeWithTag("file_row_$testFile").performClick()
+        waitForTag("preview_screen")
+        rule.onNodeWithTag("preview_open_button").performClick()
+        rule.waitUntil(10_000) { capture.intents.size == 1 }
         val view = capture.viewIntent(0)
         assertEquals(Intent.ACTION_VIEW, view.action)
         assertEquals("content", view.data?.scheme)
@@ -124,15 +159,30 @@ class FilesTest {
         assertTrue(view.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
         assertEquals("never write access", 0, view.flags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
         assertEquals(Intent.ACTION_CHOOSER, capture.intents[0].action)
-
-        rule.onNodeWithTag("file_check_$testFile").performClick()
-        rule.onNodeWithTag("selection_summary").assertTextContains("1 selected", substring = true)
-        assertEquals("the checkbox must not open the file", 1, capture.intents.size)
-        rule.onNodeWithTag("file_check_$testFile").performClick()
+        // Opening in another app does not touch the selection.
+        rule.onNodeWithContentDescription("Back").performClick()
+        waitForNoTag("preview_screen")
         rule.onNodeWithTag("selection_summary").assertTextContains("0 selected", substring = true)
     }
 
-    @Test fun apkRowAsksBeforeOpeningTheInstaller() {
+    @Test fun moveToTrashFromThePreviewGoesThroughConfirmAndTheTrash() {
+        openFilesScreen()
+        rule.onNodeWithTag("file_row_$testFile").performClick()
+        waitForTag("preview_screen")
+        rule.onNodeWithTag("preview_trash_button").performClick()
+        waitForTag("preview_confirm_button")
+        // Cancel first: nothing moves.
+        rule.onNodeWithText("Cancel").performClick()
+        assertTrue("cancel must keep the file", downloadExists())
+        rule.onNodeWithTag("preview_trash_button").performClick()
+        rule.onNodeWithTag("preview_confirm_button").performClick()
+        waitForNoTag("preview_screen")
+        waitForNoTag("file_row_$testFile")
+        assertFalse("file should have left Download", downloadExists())
+        assertTrue(Trash(storageRoot()).list().any { it.name == testFile })
+    }
+
+    @Test fun apkRowOpensThePreviewAndInstallAsksFirst() {
         shell("dd if=/dev/zero of=$apkPath bs=1024 count=64")
         rule.activityRule.scenario.recreate()
         rule.waitForIdle()
@@ -144,20 +194,28 @@ class FilesTest {
         waitForTag("file_row_$apkFile")
 
         rule.onNodeWithTag("file_row_$apkFile").performClick()
+        waitForTag("preview_screen")
+        assertEquals("a row tap must not start the installer", 0, capture.intents.size)
+        // The test file is not a real package, so the preview says so instead of crashing.
+        waitForTag("preview_failed")
+        rule.onNodeWithText("Can't preview this file").assertIsDisplayed()
+        rule.onNodeWithTag("preview_install_button").performClick()
         waitForTag("install_dialog")
         rule.onNodeWithText("Install this app?").assertIsDisplayed()
         rule.onNodeWithText("Only install apps you trust.").assertIsDisplayed()
         rule.onNodeWithTag("install_cancel_button").performClick()
         waitForNoTag("install_dialog")
         assertEquals("cancel must not start the installer", 0, capture.intents.size)
-        rule.onNodeWithTag("selection_summary").assertTextContains("0 selected", substring = true)
 
-        rule.onNodeWithTag("file_row_$apkFile").performClick()
+        rule.onNodeWithTag("preview_install_button").performClick()
         waitForTag("install_dialog")
         rule.onNodeWithTag("install_confirm_button").performClick()
         rule.waitUntil(10_000) { capture.intents.size == 1 }
         val view = capture.viewIntent(0)
         assertEquals("application/vnd.android.package-archive", view.type)
         assertEquals("content", view.data?.scheme)
+        rule.onNodeWithContentDescription("Back").performClick()
+        waitForNoTag("preview_screen")
+        rule.onNodeWithTag("selection_summary").assertTextContains("0 selected", substring = true)
     }
 }

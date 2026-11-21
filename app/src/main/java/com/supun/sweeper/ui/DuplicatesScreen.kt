@@ -43,14 +43,12 @@ import androidx.compose.ui.unit.dp
 import com.supun.sweeper.R
 import com.supun.sweeper.files.DuplicateGroup
 import com.supun.sweeper.files.DuplicateSelection
-import com.supun.sweeper.files.OpenRules
 import com.supun.sweeper.files.STAGE_FULL
 import com.supun.sweeper.files.STAGE_PREFIX
 import com.supun.sweeper.files.withoutFiles
 import com.supun.sweeper.storage.AllFilesAccess
 import com.supun.sweeper.storage.DuplicateStats
 import com.supun.sweeper.storage.FileCleaner
-import com.supun.sweeper.storage.FileOpener
 import com.supun.sweeper.util.formatBytes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -65,17 +63,17 @@ private fun stageName(stage: Int): String = when (stage) {
 private fun copies(n: Int): String = "$n copies"
 
 @Composable
-fun DuplicatesScreen(resumeCount: Int, demoKeepOldest: Boolean, onBack: () -> Unit) {
+fun DuplicatesScreen(
+    resumeCount: Int,
+    demoKeepOldest: Boolean,
+    onBack: () -> Unit,
+    onPreview: (PreviewSession) -> Unit = {},
+) {
     val context = LocalContext.current
     val cleaner = remember { FileCleaner(context) }
     val rootPath = remember { cleaner.root.canonicalPath }
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
-    var installPath by remember { mutableStateOf<String?>(null) }
-
-    fun openFile(path: String) {
-        FileOpener.open(context, path).message?.let { msg -> scope.launch { snackbar.showSnackbar(msg) } }
-    }
 
     // Re-checked on every resume (back from Settings) and after the Android 8-10 permission dialog.
     var permissionTick by remember { mutableIntStateOf(0) }
@@ -127,10 +125,8 @@ fun DuplicatesScreen(resumeCount: Int, demoKeepOldest: Boolean, onBack: () -> Un
     val loaded = groups
     val selectedBytes = loaded?.let { selection.bytes(it) } ?: 0L
 
-    fun moveSelected() {
+    fun moveChosen(chosen: DuplicateSelection) {
         val current = groups ?: return
-        val chosen = selection
-        confirm = false
         busy = true
         scope.launch {
             val move = try {
@@ -167,6 +163,25 @@ fun DuplicatesScreen(resumeCount: Int, demoKeepOldest: Boolean, onBack: () -> Un
                 scanKey++
             }
         }
+    }
+
+    fun moveSelected() {
+        confirm = false
+        moveChosen(selection)
+    }
+
+    // The preview shows over this screen and shares its selection. The copy that has to stay can be
+    // previewed but not selected or trashed; Move to trash there sends just this file through the same
+    // keep-one checks as the list.
+    fun previewSession(path: String): PreviewSession {
+        fun groupOf(): DuplicateGroup? = groups?.firstOrNull { g -> g.files.any { it.path == path } }
+        return PreviewSession(
+            path = path,
+            canSelect = { groupOf()?.let { !selection.isLastKept(it, path) } ?: false },
+            isSelected = { path in selection },
+            onToggle = { groupOf()?.let { selection = selection.toggle(it, path) } },
+            onTrash = { moveChosen(DuplicateSelection(setOf(path))) },
+        )
     }
 
     Scaffold(
@@ -245,9 +260,7 @@ fun DuplicatesScreen(resumeCount: Int, demoKeepOldest: Boolean, onBack: () -> Un
                                 selection = selection,
                                 rootPath = rootPath,
                                 onToggle = { path -> selection = selection.toggle(group, path) },
-                                onOpen = { path ->
-                                    if (OpenRules.isApk(path.substringAfterLast('/'))) installPath = path else openFile(path)
-                                },
+                                onOpen = { path -> onPreview(previewSession(path)) },
                                 onKeepOldest = { selection = selection.keepOldest(group) },
                             )
                             Spacer(Modifier.height(12.dp))
@@ -256,13 +269,6 @@ fun DuplicatesScreen(resumeCount: Int, demoKeepOldest: Boolean, onBack: () -> Un
                 }
             }
         }
-    }
-
-    installPath?.let { path ->
-        InstallConfirmDialog(
-            onCancel = { installPath = null },
-            onInstall = { installPath = null; openFile(path) },
-        )
     }
 
     if (confirm) {
@@ -348,12 +354,12 @@ private fun GroupCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("dup_row_${file.name}_$i")
-                        // A non-selectable (kept) copy can still be opened.
-                        .clickable(onClickLabel = "Open file") { onOpen(file.path) }
+                        // A non-selectable (kept) copy can still be previewed.
+                        .clickable(onClickLabel = "Preview file") { onOpen(file.path) }
                         .padding(start = 4.dp, end = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    // Only the checkbox selects; tapping the rest of the row opens the file.
+                    // Only the checkbox selects; tapping the rest of the row opens the preview.
                     Checkbox(
                         checked = checked,
                         onCheckedChange = { onToggle(file.path) },

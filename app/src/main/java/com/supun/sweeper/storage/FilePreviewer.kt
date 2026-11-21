@@ -118,17 +118,24 @@ object FilePreviewer {
     }
 
     private fun pdf(file: File, screenWidth: Int, screenHeight: Int): PreviewContent {
+        // Closed by hand: PdfRenderer only became Closeable on Android 15, so `use` would crash on older phones.
         ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
-            PdfRenderer(pfd).use { renderer ->
+            val renderer = PdfRenderer(pfd)
+            try {
                 if (renderer.pageCount < 1) return failed()
-                renderer.openPage(0).use { page ->
+                val page = renderer.openPage(0)
+                try {
                     val target = PreviewRules.pdfRenderSize(page.width, page.height, screenWidth, screenHeight)
                         ?: return failed()
                     val bitmap = Bitmap.createBitmap(target.width, target.height, Bitmap.Config.ARGB_8888)
                     bitmap.eraseColor(Color.WHITE) // PdfRenderer draws on whatever is there
                     page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                     return PreviewContent.Pdf(bitmap, renderer.pageCount)
+                } finally {
+                    page.close()
                 }
+            } finally {
+                renderer.close()
             }
         }
     }

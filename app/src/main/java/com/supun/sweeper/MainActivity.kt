@@ -5,12 +5,17 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.lifecycle.lifecycleScope
 import com.supun.sweeper.scan.ACTION_OPEN_MALWARE
 import com.supun.sweeper.scan.ScheduledScan
@@ -22,6 +27,8 @@ import com.supun.sweeper.ui.HomeScreen
 import com.supun.sweeper.ui.JunkScreen
 import com.supun.sweeper.ui.LocalRestrictedHelpExpanded
 import com.supun.sweeper.ui.MalwareScreen
+import com.supun.sweeper.ui.PreviewScreen
+import com.supun.sweeper.ui.PreviewSession
 import com.supun.sweeper.ui.Screen
 import com.supun.sweeper.ui.ScreenSaver
 import com.supun.sweeper.ui.TAB_APK
@@ -57,6 +64,8 @@ class MainActivity : ComponentActivity() {
             "apk" -> TAB_APK
             else -> TAB_LARGE
         }
+        // Debug builds only: "--es preview <path>" opens the preview of that file on the Files screen.
+        val demoPreview = (if (BuildConfig.DEBUG) intent.getStringExtra("preview") else null).orEmpty()
         // Debug builds only: preselect "keep oldest" in every group once the duplicate scan finishes.
         val demoKeepOldest = BuildConfig.DEBUG && intent.getStringExtra("demo") == "keepoldest"
         // Debug builds only: "--es select pkg1,pkg2" ticks those apps on the Apps screen (for screenshots).
@@ -93,8 +102,19 @@ class MainActivity : ComponentActivity() {
             SweeperTheme {
                 CompositionLocalProvider(LocalRestrictedHelpExpanded provides demoRestricted) {
                     var screen by rememberSaveable(stateSaver = ScreenSaver) { mutableStateOf(startScreen) }
-                    BackHandler(enabled = screen != Screen.Home) { screen = Screen.Home }
-                    when (screen) {
+                    // The preview of a tapped file lies over its list screen, which stays composed (so its scan
+                    // and selection survive); Back closes the preview first.
+                    var previewSession by remember { mutableStateOf<PreviewSession?>(null) }
+                    val current = screen
+                    BackHandler(enabled = current != Screen.Home) {
+                        screen = if (current is Screen.Preview) current.origin else Screen.Home
+                    }
+                    val listScreen = if (current is Screen.Preview) current.origin else current
+                    val previewing = current is Screen.Preview
+                    Box(Modifier.fillMaxSize()) {
+                    // While the preview is up the list is hidden from touch and from screen readers.
+                    Box(Modifier.fillMaxSize().then(if (previewing) Modifier.clearAndSetSemantics { } else Modifier)) {
+                    when (listScreen) {
                         Screen.Home -> HomeScreen(
                             resumeCount = resumeCount,
                             onOpenApps = { screen = Screen.Apps },
@@ -113,11 +133,20 @@ class MainActivity : ComponentActivity() {
                             resumeCount = resumeCount,
                             initialTab = startTab,
                             onBack = { screen = Screen.Home },
+                            onPreview = { session ->
+                                previewSession = session
+                                screen = Screen.Preview(Screen.Files, session.path)
+                            },
+                            demoPreview = demoPreview,
                         )
                         Screen.Duplicates -> DuplicatesScreen(
                             resumeCount = resumeCount,
                             demoKeepOldest = demoKeepOldest,
                             onBack = { screen = Screen.Home },
+                            onPreview = { session ->
+                                previewSession = session
+                                screen = Screen.Preview(Screen.Duplicates, session.path)
+                            },
                         )
                         Screen.Junk -> JunkScreen(
                             resumeCount = resumeCount,
@@ -134,6 +163,13 @@ class MainActivity : ComponentActivity() {
                             resumeCount = resumeCount,
                             onBack = { screen = Screen.Home },
                         )
+                        is Screen.Preview -> Unit // never: listScreen is the origin
+                    }
+                    }
+                    val session = previewSession
+                    if (current is Screen.Preview && session != null) {
+                        PreviewScreen(session = session, onBack = { screen = current.origin })
+                    }
                     }
                 }
             }

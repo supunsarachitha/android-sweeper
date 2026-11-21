@@ -54,12 +54,10 @@ import androidx.compose.ui.unit.dp
 import com.supun.sweeper.R
 import com.supun.sweeper.files.FoundFile
 import com.supun.sweeper.files.MB
-import com.supun.sweeper.files.OpenRules
 import com.supun.sweeper.files.ScanCandidates
 import com.supun.sweeper.storage.AllFilesAccess
 import com.supun.sweeper.storage.ApkInfo
 import com.supun.sweeper.storage.FileCleaner
-import com.supun.sweeper.storage.FileOpener
 import com.supun.sweeper.util.formatBytes
 import java.io.File
 import kotlinx.coroutines.CancellationException
@@ -87,7 +85,13 @@ internal fun formatDate(millis: Long): String = formatDay(millis)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FilesScreen(resumeCount: Int, initialTab: Int, onBack: () -> Unit) {
+fun FilesScreen(
+    resumeCount: Int,
+    initialTab: Int,
+    onBack: () -> Unit,
+    onPreview: (PreviewSession) -> Unit = {},
+    demoPreview: String = "",
+) {
     val context = LocalContext.current
     val cleaner = remember { FileCleaner(context) }
     val rootPath = remember { cleaner.root.canonicalPath }
@@ -110,12 +114,6 @@ fun FilesScreen(resumeCount: Int, initialTab: Int, onBack: () -> Unit) {
     var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
     var confirm by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
-    var installTarget by remember { mutableStateOf<FoundFile?>(null) }
-
-    fun openFile(path: String) {
-        val result = FileOpener.open(context, path)
-        result.message?.let { msg -> scope.launch { snackbar.showSnackbar(msg) } }
-    }
 
     // One walk per visit (and one more after an undo); thresholds are applied to its result.
     LaunchedEffect(granted, scanKey) {
@@ -144,13 +142,11 @@ fun FilesScreen(resumeCount: Int, initialTab: Int, onBack: () -> Unit) {
     val selectedFiles = visible.filter { it.path in selected }
     val selectedBytes = selectedFiles.sumOf { it.size }
 
-    fun moveSelected() {
-        val toMove = selectedFiles
-        confirm = false
+    fun trashPaths(paths: List<String>) {
         busy = true
         scope.launch {
             val result = try {
-                cleaner.moveToTrash(toMove)
+                cleaner.moveFilesToTrash(paths)
             } finally {
                 busy = false
             }
@@ -174,6 +170,24 @@ fun FilesScreen(resumeCount: Int, initialTab: Int, onBack: () -> Unit) {
                 scanKey++
             }
         }
+    }
+
+    fun moveSelected() {
+        confirm = false
+        trashPaths(selectedFiles.map { it.path })
+    }
+
+    // The preview shows over this screen and shares its selection; Move to trash there reuses trashPaths.
+    fun previewSession(path: String) = PreviewSession(
+        path = path,
+        canSelect = { true },
+        isSelected = { path in selected },
+        onToggle = { selected = if (path in selected) selected - path else selected + path },
+        onTrash = { trashPaths(listOf(path)) },
+    )
+    LaunchedEffect(Unit) {
+        // Debug builds only (the extra is ignored in release): opens the preview for screenshots.
+        if (demoPreview.isNotEmpty()) onPreview(previewSession(demoPreview))
     }
 
     Scaffold(
@@ -278,10 +292,7 @@ fun FilesScreen(resumeCount: Int, initialTab: Int, onBack: () -> Unit) {
                                 checked = file.path in selected,
                                 cleaner = cleaner,
                                 showApkInfo = tab == TAB_APK,
-                                onOpen = {
-                                    // APK files get a confirm step first; the installer itself asks again.
-                                    if (OpenRules.isApk(file.name)) installTarget = file else openFile(file.path)
-                                },
+                                onOpen = { onPreview(previewSession(file.path)) },
                                 onToggle = {
                                     selected = if (file.path in selected) selected - file.path else selected + file.path
                                 },
@@ -291,13 +302,6 @@ fun FilesScreen(resumeCount: Int, initialTab: Int, onBack: () -> Unit) {
                 }
             }
         }
-    }
-
-    installTarget?.let { target ->
-        InstallConfirmDialog(
-            onCancel = { installTarget = null },
-            onInstall = { installTarget = null; openFile(target.path) },
-        )
     }
 
     if (confirm) {
@@ -380,11 +384,11 @@ private fun FileRow(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("file_row_${file.name}")
-            .clickable(onClickLabel = "Open file", onClick = onOpen)
+            .clickable(onClickLabel = "Preview file", onClick = onOpen)
             .padding(horizontal = 4.dp, vertical = 0.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Only the checkbox selects; tapping the rest of the row opens the file.
+        // Only the checkbox selects; tapping the rest of the row opens the preview.
         Checkbox(
             checked = checked,
             onCheckedChange = { onToggle() },
