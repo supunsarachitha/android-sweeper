@@ -141,14 +141,16 @@ fun PreviewScreen(session: PreviewSession, onBack: () -> Unit) {
                         ) { Text("Open with…") }
                     }
                     if (canSelect) {
-                        OutlinedButton(
-                            onClick = { session.onToggle() },
-                            modifier = Modifier.fillMaxWidth().testTag("preview_select_button"),
-                        ) { Text(if (selected) "Deselect" else "Select") }
-                        OutlinedButton(
-                            onClick = { confirmTrash = true },
-                            modifier = Modifier.fillMaxWidth().testTag("preview_trash_button"),
-                        ) { Text("Move to trash") }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = { session.onToggle() },
+                                modifier = Modifier.weight(1f).testTag("preview_select_button"),
+                            ) { Text(if (selected) "Deselect" else "Select", maxLines = 1) }
+                            OutlinedButton(
+                                onClick = { confirmTrash = true },
+                                modifier = Modifier.weight(1f).testTag("preview_trash_button"),
+                            ) { Text("Move to trash", maxLines = 1) }
+                        }
                     } else {
                         Text(
                             "This is the copy that stays. Duplicates always keep one copy, so it can't be selected or trashed.",
@@ -157,7 +159,7 @@ fun PreviewScreen(session: PreviewSession, onBack: () -> Unit) {
                             modifier = Modifier.testTag("preview_keep_note"),
                         )
                     }
-            }
+                }
             }
         },
     ) { padding ->
@@ -172,7 +174,7 @@ fun PreviewScreen(session: PreviewSession, onBack: () -> Unit) {
             PreviewBody(content, path)
 
             Card(Modifier.fillMaxWidth().testTag("preview_details"), colors = sweeperCardColors()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     DetailLine("Name", name)
                     DetailLine("Folder", relativeFolder(rootPath, path))
                     DetailLine("Size", details?.let { nbBytes(it.size) } ?: "…")
@@ -239,14 +241,14 @@ private fun PreviewBody(content: PreviewContent?, path: String) {
             bitmap = content.bitmap.asImageBitmap(),
             contentDescription = "Preview of ${File(path).name}",
             contentScale = ContentScale.Fit,
-            modifier = box.heightIn(max = 320.dp).clip(RoundedCornerShape(12.dp)).testTag("preview_image"),
+            modifier = box.heightIn(max = 260.dp).clip(RoundedCornerShape(12.dp)).testTag("preview_image"),
         )
         is PreviewContent.Pdf -> Column(box, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Image(
                 bitmap = content.page.asImageBitmap(),
                 contentDescription = "First page of ${File(path).name}",
                 contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp).testTag("preview_pdf"),
+                modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp).testTag("preview_pdf"),
             )
             Text(
                 if (content.pageCount == 1) "1 page, first page shown" else "${content.pageCount} pages, first page shown",
