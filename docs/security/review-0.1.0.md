@@ -121,6 +121,8 @@ The biggest real risk of a cleaner is deleting the wrong files. These rules appl
 
 2026-11-15: Gradle updated to 9.9.1 for GHSA-3cfg-jpcr-gfp3, GHSA-gqrr-4j89-5267 and GHSA-pcp8-98xm-c6pr (published 2026-11-10, affecting 9.0.0 to 9.9.0), which the weekly scan reported.
 
+2026-11-21: Gradle updated to 9.9.2 for GHSA-99wf-vhq9-wm2x, GHSA-7f7r-77ff-fr6f, GHSA-4mf6-7pm2-6wm8 and GHSA-35pj-rg5r-8rpv (published 2026-11-19, affecting 9.0.0 to 9.9.1).
+
 Remaining, accepted: the scan reports build-time-only advisories inside AGP's own dependencies (Guava, BouncyCastle, commons-lang3, httpclient, jose4j, jdom2) as warnings. They run only inside the build, never ship in the APK, and are fixed by AGP updates.
 
 Not tested: dependency verification against a tampered artifact. Gradle enforces it whenever the metadata file is present; no tamper test was run.
