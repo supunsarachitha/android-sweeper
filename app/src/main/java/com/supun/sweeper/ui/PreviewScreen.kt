@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -26,6 +27,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -119,6 +121,45 @@ fun PreviewScreen(session: PreviewSession, onBack: () -> Unit) {
         modifier = Modifier.testTag("preview_screen"),
         topBar = { SweeperTopBar(name, onBack = onBack) },
         snackbarHost = { SnackbarHost(snackbar) },
+        bottomBar = {
+            Surface(Modifier.fillMaxWidth(), tonalElevation = 3.dp, shadowElevation = 3.dp) {
+                Column(
+                    Modifier.navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (isApk) {
+                        Button(
+                            onClick = { confirmInstall = true },
+                            modifier = Modifier.fillMaxWidth().testTag("preview_install_button"),
+                        ) { Text("Install") }
+                    } else {
+                        Button(
+                            onClick = {
+                                FileOpener.open(context, path).message?.let { msg -> scope.launch { snackbar.showSnackbar(msg) } }
+                            },
+                            modifier = Modifier.fillMaxWidth().testTag("preview_open_button"),
+                        ) { Text("Open with…") }
+                    }
+                    if (canSelect) {
+                        OutlinedButton(
+                            onClick = { session.onToggle() },
+                            modifier = Modifier.fillMaxWidth().testTag("preview_select_button"),
+                        ) { Text(if (selected) "Deselect" else "Select") }
+                        OutlinedButton(
+                            onClick = { confirmTrash = true },
+                            modifier = Modifier.fillMaxWidth().testTag("preview_trash_button"),
+                        ) { Text("Move to trash") }
+                    } else {
+                        Text(
+                            "This is the copy that stays. Duplicates always keep one copy, so it can't be selected or trashed.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.testTag("preview_keep_note"),
+                        )
+                    }
+            }
+            }
+        },
     ) { padding ->
         Column(
             Modifier
@@ -137,39 +178,6 @@ fun PreviewScreen(session: PreviewSession, onBack: () -> Unit) {
                     DetailLine("Size", details?.let { nbBytes(it.size) } ?: "…")
                     DetailLine("Modified", details?.let { formatDate(it.modified) } ?: "…")
                     DetailLine("Type", typeLabel(name))
-                }
-            }
-
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (isApk) {
-                    Button(
-                        onClick = { confirmInstall = true },
-                        modifier = Modifier.fillMaxWidth().testTag("preview_install_button"),
-                    ) { Text("Install") }
-                } else {
-                    Button(
-                        onClick = {
-                            FileOpener.open(context, path).message?.let { msg -> scope.launch { snackbar.showSnackbar(msg) } }
-                        },
-                        modifier = Modifier.fillMaxWidth().testTag("preview_open_button"),
-                    ) { Text("Open with…") }
-                }
-                if (canSelect) {
-                    OutlinedButton(
-                        onClick = { session.onToggle() },
-                        modifier = Modifier.fillMaxWidth().testTag("preview_select_button"),
-                    ) { Text(if (selected) "Deselect" else "Select") }
-                    OutlinedButton(
-                        onClick = { confirmTrash = true },
-                        modifier = Modifier.fillMaxWidth().testTag("preview_trash_button"),
-                    ) { Text("Move to trash") }
-                } else {
-                    Text(
-                        "This is the copy that stays. Duplicates always keep one copy, so it can't be selected or trashed.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.testTag("preview_keep_note"),
-                    )
                 }
             }
         }
