@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -100,7 +101,7 @@ class PreviewTest {
         rule.onNodeWithTag("file_row_$name").performClick()
         waitForTag("preview_screen")
         waitForTag(expectedTag)
-        rule.onNodeWithTag("preview_details").assertIsDisplayed()
+        rule.onNodeWithTag("preview_details").performScrollTo().assertIsDisplayed()
     }
 
     private fun closePreview() {

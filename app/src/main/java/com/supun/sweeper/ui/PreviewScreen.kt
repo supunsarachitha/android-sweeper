@@ -239,14 +239,14 @@ private fun PreviewBody(content: PreviewContent?, path: String) {
             bitmap = content.bitmap.asImageBitmap(),
             contentDescription = "Preview of ${File(path).name}",
             contentScale = ContentScale.Fit,
-            modifier = box.heightIn(max = 360.dp).clip(RoundedCornerShape(12.dp)).testTag("preview_image"),
+            modifier = box.heightIn(max = 320.dp).clip(RoundedCornerShape(12.dp)).testTag("preview_image"),
         )
         is PreviewContent.Pdf -> Column(box, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Image(
                 bitmap = content.page.asImageBitmap(),
                 contentDescription = "First page of ${File(path).name}",
                 contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp).testTag("preview_pdf"),
+                modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp).testTag("preview_pdf"),
             )
             Text(
                 if (content.pageCount == 1) "1 page, first page shown" else "${content.pageCount} pages, first page shown",
